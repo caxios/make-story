@@ -1,0 +1,235 @@
+{
+  "world": {
+    "title": "The Wizarding World",
+    "genre": "fantasy",
+    "tone": "whimsical but darkening",
+    "era": "1990s Britain",
+    "overview": "A hidden magical society exists alongside — and carefully concealed from — ordinary Britain. Witches and wizards are educated at boarding schools, governed by a Ministry of Magic, and bound by a Statute of Secrecy that has held for three centuries. A decade ago a dark wizard's war ended abruptly and unexplainably, and the peace since has felt provisional.",
+    "rules": [
+      {
+        "id": "rule-wand",
+        "category": "magic",
+        "statement": "Deliberate spellcasting requires a wand, and a wand chooses its owner.",
+        "exceptions": [
+          "Young or highly distressed witches and wizards produce uncontrolled accidental magic without a wand."
+        ]
+      },
+      {
+        "id": "rule-secrecy",
+        "category": "politics",
+        "statement": "Magic must never be revealed to non-magical people; breaches are erased by Ministry memory charms.",
+        "exceptions": [
+          "Non-magical parents and guardians of magical children may be informed."
+        ]
+      },
+      {
+        "id": "rule-gamp",
+        "category": "physics",
+        "statement": "Magic cannot create food, life, love, or true wealth from nothing; it can only transform what already exists.",
+        "exceptions": [
+          "Existing food may be multiplied or summoned from elsewhere."
+        ]
+      }
+    ],
+    "locations": [
+      {
+        "id": "great-hall",
+        "name": "The Great Hall",
+        "description": "The cavernous dining hall of Hogwarts castle, lit by thousands of floating candles beneath an enchanted ceiling that mirrors the sky outside.",
+        "parent_location_id": "hogwarts",
+        "notable_features": [
+          "Enchanted ceiling",
+          "Four long house tables",
+          "Staff table on a raised dais"
+        ]
+      }
+    ],
+    "factions": [
+      "Hogwarts",
+      "Ministry of Magic",
+      "The Order of the Phoenix",
+      "Death Eaters"
+    ],
+    "additional_lore": {
+      "houses": "Students are sorted into Gryffindor, Hufflepuff, Ravenclaw, or Slytherin in their first year.",
+      "currency": "Galleons, Sickles, and Knuts, minted and guarded by goblins at Gringotts."
+    }
+  },
+  "characters": [
+    {
+      "id": "harry-potter",
+      "name": "Harry Potter",
+      "aliases": [
+        "The Boy Who Lived"
+      ],
+      "age": 11,
+      "gender": "male",
+      "appearance": "Small and thin for his age, with untidy black hair, bright green eyes behind taped round glasses, and a thin lightning-shaped scar on his forehead.",
+      "personality_summary": "Quietly brave and stubbornly loyal, shaped by years of neglect into someone who expects little and notices everything. He is uncomfortable with attention and quick to act when someone weaker is threatened.",
+      "traits": [
+        {
+          "name": "courageous",
+          "intensity": 0.9,
+          "description": "Acts before fear can talk him out of it."
+        },
+        {
+          "name": "self-effacing",
+          "intensity": 0.7,
+          "description": "Deflects praise and disbelieves his own fame."
+        },
+        {
+          "name": "rule-bending",
+          "intensity": 0.6,
+          "description": "Breaks rules readily when a friend is at stake."
+        }
+      ],
+      "speech_style": "Plain, informal, often hesitant. Short sentences. Asks questions rather than making claims, and goes quiet when embarrassed.",
+      "values": [
+        "loyalty to friends",
+        "fairness",
+        "protecting the defenceless"
+      ],
+      "goals": [
+        "Find out who his parents really were",
+        "Belong somewhere for the first time"
+      ],
+      "backstory": "Orphaned as an infant when a dark wizard killed his parents and inexplicably failed to kill him, he was raised by hostile relatives who told him nothing about magic until his eleventh birthday.",
+      "relationships": [
+        {
+          "target_character_id": "hermione-granger",
+          "type": "friend",
+          "sentiment": 0.6,
+          "description": "Initially finds her overbearing; comes to rely on her completely."
+        },
+        {
+          "target_character_id": "ron-weasley",
+          "type": "friend",
+          "sentiment": 0.7,
+          "description": "The first person who treated him as ordinary."
+        }
+      ],
+      "secrets": [
+        "He can sometimes feel his scar prickle near certain people and has told no one."
+      ],
+      "author_notes": "Keep him reactive rather than clever — Hermione supplies the answers, Harry supplies the nerve."
+    },
+    {
+      "id": "hermione-granger",
+      "name": "Hermione Granger",
+      "aliases": [],
+      "age": 11,
+      "gender": "female",
+      "appearance": "Bushy brown hair, rather large front teeth, always immaculately dressed in fresh school robes with a book under one arm.",
+      "personality_summary": "Fiercely intelligent and anxious to prove she belongs in a world she was not born into. Her bossiness is armour; underneath it she badly wants to be liked.",
+      "traits": [
+        {
+          "name": "diligent",
+          "intensity": 0.95,
+          "description": "Reads ahead, always."
+        },
+        {
+          "name": "anxious",
+          "intensity": 0.7,
+          "description": "Fear of failure drives most of her behaviour."
+        },
+        {
+          "name": "principled",
+          "intensity": 0.8,
+          "description": "Rules matter to her until people matter more."
+        }
+      ],
+      "speech_style": "Rapid, precise, full sentences with subordinate clauses. Quotes textbooks verbatim and corrects others mid-sentence.",
+      "values": [
+        "knowledge",
+        "justice",
+        "earning her place"
+      ],
+      "goals": [
+        "Be top of every class",
+        "Make a real friend"
+      ],
+      "backstory": "The only child of two Muggle dentists, she learned of magic by letter and memorised every set text before term began.",
+      "relationships": [
+        {
+          "target_character_id": "harry-potter",
+          "type": "friend",
+          "sentiment": 0.5,
+          "description": "Curious about his fame, irritated by his indifference to homework."
+        },
+        {
+          "target_character_id": "ron-weasley",
+          "type": "rival",
+          "sentiment": -0.2,
+          "description": "Finds him lazy; is stung that he does not like her."
+        }
+      ],
+      "secrets": [
+        "She cries in the girls' bathroom more often than anyone knows."
+      ],
+      "author_notes": "Her competence should read as loneliness, not showing off."
+    },
+    {
+      "id": "ron-weasley",
+      "name": "Ron Weasley",
+      "aliases": [],
+      "age": 11,
+      "gender": "male",
+      "appearance": "Tall, gangling and freckled, with flaming red hair, a long nose, and second-hand robes an inch too short at the wrist.",
+      "personality_summary": "Warm, funny and fiercely loyal, with a streak of insecurity about being the sixth son of a family that has already done everything first. He deflates tension with a joke and hides worry behind bluster.",
+      "traits": [
+        {
+          "name": "loyal",
+          "intensity": 0.9,
+          "description": "Once he decides you are his friend, that is settled."
+        },
+        {
+          "name": "insecure",
+          "intensity": 0.75,
+          "description": "Certain he will never measure up to his brothers."
+        },
+        {
+          "name": "humorous",
+          "intensity": 0.7,
+          "description": "Jokes first, especially when frightened."
+        }
+      ],
+      "speech_style": "Casual and slangy, full of 'blimey' and 'mental'. Blurts things out and then regrets them. Explains the wizarding world as if everyone already knows it.",
+      "values": [
+        "family",
+        "loyalty",
+        "not being pitied"
+      ],
+      "goals": [
+        "Be good at something before one of his brothers was",
+        "Make a friend who is his and not a Weasley family fixture"
+      ],
+      "backstory": "The sixth of seven Weasley children, raised in a cheerfully overcrowded house where everything he owns belonged to somebody else first.",
+      "relationships": [
+        {
+          "target_character_id": "harry-potter",
+          "type": "friend",
+          "sentiment": 0.7,
+          "description": "Awed by the name, relieved to find an ordinary boy underneath it."
+        },
+        {
+          "target_character_id": "hermione-granger",
+          "type": "rival",
+          "sentiment": -0.3,
+          "description": "Her corrections land on exactly the nerve he is trying to protect."
+        }
+      ],
+      "secrets": [
+        "His wand is Charlie's hand-me-down and barely works."
+      ],
+      "author_notes": "His humour is a defence. Let the insecurity show only when he is alone or cornered."
+    }
+  ],
+  "episodes": [
+    {
+      "episode_number": 1,
+      "title": "The Sorting",
+      "author_storyline": "Harry arrives at Hogwarts and is sorted in the Great Hall under the enchanted ceiling. He meets Hermione, who talks nonstop out of nerves and irritates him. The hat hesitates over Harry far longer than over anyone else, and the whole hall notices — cementing the fame he did not ask for. End on Harry catching a teacher watching him with unreadable intensity, and his scar prickling for the first time.",
+      "status": "queued"
+    }
+  ]
+}

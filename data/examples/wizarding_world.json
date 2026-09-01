@@ -1,0 +1,874 @@
+{
+  "world": {
+    "title": "The Wizarding World",
+    "genre": "fantasy",
+    "tone": "whimsical but darkening",
+    "era": "1990s Britain",
+    "overview": "A hidden magical society exists alongside, and carefully concealed from, ordinary Britain. Witches and wizards are educated at boarding schools, governed by a Ministry of Magic, and bound by a Statute of Secrecy that has held for three centuries.\n\nA decade ago a dark wizard's war ended abruptly and unexplainably when he tried to kill an infant and failed. The peace since has felt provisional. Adults change the subject when the war comes up; children grow up on a version of the story with the frightening parts taken out. Something is being kept safe at Hogwarts this year, and the people who know what it is are not the people telling anyone.",
+    "rules": [
+      {
+        "id": "rule-wand",
+        "category": "magic",
+        "statement": "Deliberate spellcasting requires a wand, and a wand chooses its owner.",
+        "exceptions": [
+          "Young or frightened witches and wizards produce uncontrolled accidental magic without one."
+        ]
+      },
+      {
+        "id": "rule-secrecy",
+        "category": "politics",
+        "statement": "Magic must never be revealed to non-magical people; breaches are erased by Ministry memory charms.",
+        "exceptions": [
+          "The non-magical parents and guardians of magical children may be told."
+        ]
+      },
+      {
+        "id": "rule-gamp",
+        "category": "physics",
+        "statement": "Magic cannot create food, life, love, or true wealth from nothing; it can only transform what already exists.",
+        "exceptions": [
+          "Existing food may be multiplied, or summoned from somewhere it already is."
+        ]
+      },
+      {
+        "id": "rule-underage",
+        "category": "politics",
+        "statement": "Students may not perform magic outside school during the holidays, and the Ministry detects when they do.",
+        "exceptions": [
+          "Detection is by location, not by person, so it cannot tell a child from an adult in a wizarding house."
+        ]
+      },
+      {
+        "id": "rule-apparition",
+        "category": "magic",
+        "statement": "Apparition requires a licence and intense concentration; getting it wrong splinches the traveller.",
+        "exceptions": [
+          "Nobody can apparate into or out of Hogwarts grounds."
+        ]
+      },
+      {
+        "id": "rule-sorting",
+        "category": "magic",
+        "statement": "The Sorting Hat reads a first-year's mind and places them in a house, taking the student's own preference into account.",
+        "exceptions": []
+      },
+      {
+        "id": "rule-houses",
+        "category": "politics",
+        "statement": "House points are awarded for merit and taken for infractions; the house with the most at year's end wins the House Cup.",
+        "exceptions": []
+      },
+      {
+        "id": "rule-portraits",
+        "category": "magic",
+        "statement": "Magical portraits hold an impression of their subject and can talk, gossip, and move between their own frames.",
+        "exceptions": [
+          "A portrait knows only what its subject knew when it was painted, plus what it has since overheard."
+        ]
+      },
+      {
+        "id": "rule-owls",
+        "category": "magic",
+        "statement": "Owls carry post and can find any recipient anywhere, without an address.",
+        "exceptions": []
+      },
+      {
+        "id": "rule-forest",
+        "category": "physics",
+        "statement": "The Forbidden Forest is out of bounds to students, and the creatures in it do not respect wizarding authority.",
+        "exceptions": [
+          "Detention parties enter it under supervision, which the centaurs resent."
+        ]
+      },
+      {
+        "id": "rule-quidditch",
+        "category": "politics",
+        "statement": "Quidditch is played on brooms by seven players a side, and first years are not permitted their own brooms.",
+        "exceptions": [
+          "A Head of House may petition for an exception for an exceptional player."
+        ]
+      },
+      {
+        "id": "rule-gringotts",
+        "category": "politics",
+        "statement": "Gringotts is run by goblins, and its deep vaults are guarded by dragons and by charms that trap thieves inside.",
+        "exceptions": []
+      },
+      {
+        "id": "rule-invisibility",
+        "category": "magic",
+        "statement": "Invisibility cloaks fade with age and can be seen through by some magical creatures and by certain charms.",
+        "exceptions": [
+          "A true Deathly Hallows cloak never fades and cannot be penetrated."
+        ]
+      },
+      {
+        "id": "rule-love",
+        "category": "magic",
+        "statement": "A sacrifice made out of love leaves a protection in the blood that dark magic cannot touch.",
+        "exceptions": []
+      },
+      {
+        "id": "rule-mirror",
+        "category": "magic",
+        "statement": "The Mirror of Erised shows the deepest desire of the heart, and shows nothing true; men have wasted away before it.",
+        "exceptions": []
+      }
+    ],
+    "locations": [
+      {
+        "id": "privet-drive",
+        "name": "Number Four, Privet Drive",
+        "description": "A relentlessly ordinary suburban house in Little Whinging, where nothing is permitted to be strange.",
+        "parent_location_id": null,
+        "notable_features": [
+          "The cupboard under the stairs",
+          "A television always slightly too loud",
+          "An immaculate front lawn"
+        ]
+      },
+      {
+        "id": "diagon-alley",
+        "name": "Diagon Alley",
+        "description": "A crooked cobbled street of wizarding shops, reached through a brick wall behind the Leaky Cauldron.",
+        "parent_location_id": null,
+        "notable_features": [
+          "Ollivanders",
+          "Flourish and Blotts",
+          "Madam Malkin's"
+        ]
+      },
+      {
+        "id": "gringotts",
+        "name": "Gringotts Wizarding Bank",
+        "description": "A towering white building leaning off true, staffed by goblins, with vaults miles beneath London.",
+        "parent_location_id": "diagon-alley",
+        "notable_features": [
+          "Cart tracks into the dark",
+          "A dragon somewhere below",
+          "Doors that warn thieves in verse"
+        ]
+      },
+      {
+        "id": "platform-nine-three-quarters",
+        "name": "Platform Nine and Three-Quarters",
+        "description": "A hidden platform at King's Cross, reached by walking straight at a solid barrier.",
+        "parent_location_id": null,
+        "notable_features": [
+          "The scarlet Hogwarts Express",
+          "Steam and owl noise",
+          "Parents pretending not to cry"
+        ]
+      },
+      {
+        "id": "hogwarts-express",
+        "name": "The Hogwarts Express",
+        "description": "A scarlet steam engine that carries students north for a whole day, compartment by compartment.",
+        "parent_location_id": null,
+        "notable_features": [
+          "The trolley witch",
+          "Sliding compartment doors",
+          "Fields turning to mountains"
+        ]
+      },
+      {
+        "id": "hogwarts",
+        "name": "Hogwarts School of Witchcraft and Wizardry",
+        "description": "A vast castle of towers and turrets above a black lake, with a hundred and forty-two staircases that like to move.",
+        "parent_location_id": null,
+        "notable_features": [
+          "Moving staircases",
+          "Talking portraits",
+          "Doors that are not doors on a Tuesday"
+        ]
+      },
+      {
+        "id": "great-hall",
+        "name": "The Great Hall",
+        "description": "The cavernous dining hall, lit by thousands of floating candles beneath an enchanted ceiling that mirrors the sky outside.",
+        "parent_location_id": "hogwarts",
+        "notable_features": [
+          "Enchanted ceiling",
+          "Four long house tables",
+          "Staff table on a raised dais"
+        ]
+      },
+      {
+        "id": "gryffindor-tower",
+        "name": "Gryffindor Tower",
+        "description": "A round common room in red and gold, up a spiral stair behind a portrait of a Fat Lady who demands a password.",
+        "parent_location_id": "hogwarts",
+        "notable_features": [
+          "Squashy armchairs",
+          "A fire always lit",
+          "The Fat Lady's portrait"
+        ]
+      },
+      {
+        "id": "forbidden-corridor",
+        "name": "The Third-Floor Corridor",
+        "description": "A locked corridor on the right-hand side of the third floor, out of bounds to anyone who does not wish to die a very painful death.",
+        "parent_location_id": "hogwarts",
+        "notable_features": [
+          "A door that opens to Alohomora",
+          "A three-headed dog",
+          "A trapdoor underneath it"
+        ]
+      },
+      {
+        "id": "forbidden-forest",
+        "name": "The Forbidden Forest",
+        "description": "Dense, ancient woodland at the edge of the grounds, full of things that were old before the castle was built.",
+        "parent_location_id": "hogwarts",
+        "notable_features": [
+          "Centaurs",
+          "Unicorns",
+          "Something that drinks their blood"
+        ]
+      }
+    ],
+    "factions": [
+      "Gryffindor",
+      "Slytherin",
+      "Hufflepuff",
+      "Ravenclaw"
+    ],
+    "additional_lore": {
+      "houses": "Students are sorted into Gryffindor (courage), Slytherin (ambition), Hufflepuff (loyalty), or Ravenclaw (wit) in their first year, and the house becomes their family for seven years.",
+      "currency": "Galleons, Sickles and Knuts, minted and guarded by goblins at Gringotts. Seventeen Sickles to the Galleon, twenty-nine Knuts to the Sickle.",
+      "the_war": "Eleven years ago a dark wizard most people will not name was defeated; his followers claimed to have been enchanted, and most of them are still at large and respectable."
+    }
+  },
+  "characters": [
+    {
+      "id": "harry-potter",
+      "name": "Harry Potter",
+      "aliases": [
+        "The Boy Who Lived"
+      ],
+      "age": 11,
+      "gender": "male",
+      "appearance": "Small and thin for his age, with untidy black hair, bright green eyes behind taped round glasses, and a thin lightning-shaped scar on his forehead.",
+      "personality_summary": "Quietly brave and stubbornly loyal, shaped by years of neglect into someone who expects little and notices everything. He is uncomfortable with attention and quick to act when someone weaker is threatened.",
+      "traits": [
+        {
+          "name": "courageous",
+          "intensity": 0.9,
+          "description": "Acts before fear can talk him out of it."
+        },
+        {
+          "name": "self-effacing",
+          "intensity": 0.7,
+          "description": "Deflects praise and disbelieves his own fame."
+        },
+        {
+          "name": "rule-bending",
+          "intensity": 0.6,
+          "description": "Breaks rules readily when a friend is at stake."
+        }
+      ],
+      "speech_style": "Plain, informal, often hesitant. Short sentences. Asks questions rather than making claims, and goes quiet when embarrassed.",
+      "values": [
+        "loyalty to friends",
+        "fairness",
+        "protecting the defenceless"
+      ],
+      "goals": [
+        "Find out who his parents really were",
+        "Belong somewhere for the first time"
+      ],
+      "backstory": "Orphaned as an infant when a dark wizard killed his parents and inexplicably failed to kill him, he was raised by hostile relatives who told him nothing about magic until his eleventh birthday.",
+      "relationships": [
+        {
+          "target_character_id": "ron-weasley",
+          "type": "best friend",
+          "sentiment": 0.8,
+          "description": "The first person who treated him as ordinary."
+        },
+        {
+          "target_character_id": "hermione-granger",
+          "type": "friend",
+          "sentiment": 0.6,
+          "description": "Initially finds her overbearing; comes to rely on her completely."
+        },
+        {
+          "target_character_id": "draco-malfoy",
+          "type": "enemy",
+          "sentiment": -0.6,
+          "description": "Took an instant dislike to him in a robe shop and has not revised it."
+        },
+        {
+          "target_character_id": "rubeus-hagrid",
+          "type": "friend",
+          "sentiment": 0.9,
+          "description": "The first adult who was ever glad to see him."
+        },
+        {
+          "target_character_id": "severus-snape",
+          "type": "enemy",
+          "sentiment": -0.7,
+          "description": "Cannot work out what he has done to deserve the loathing."
+        },
+        {
+          "target_character_id": "albus-dumbledore",
+          "type": "mentor",
+          "sentiment": 0.6,
+          "description": "Trusts him, and is never quite told everything."
+        },
+        {
+          "target_character_id": "vernon-dursley",
+          "type": "family",
+          "sentiment": -0.8,
+          "description": "Ten years of being treated as an inconvenience."
+        }
+      ],
+      "secrets": [
+        "He can sometimes feel his scar prickle near certain people and has told no one.",
+        "He goes back to the Mirror of Erised at night."
+      ],
+      "author_notes": "Keep him reactive rather than clever. Hermione supplies the answers, Harry supplies the nerve."
+    },
+    {
+      "id": "ron-weasley",
+      "name": "Ron Weasley",
+      "aliases": [],
+      "age": 11,
+      "gender": "male",
+      "appearance": "Tall, gangling and freckled, with flaming red hair, a long nose, and second-hand robes an inch too short at the wrist.",
+      "personality_summary": "Warm, funny and fiercely loyal, with a streak of insecurity about being the sixth son of a family that has already done everything first. He deflates tension with a joke and hides worry behind bluster.",
+      "traits": [
+        {
+          "name": "loyal",
+          "intensity": 0.9,
+          "description": "Once he decides you are his friend, that is settled."
+        },
+        {
+          "name": "insecure",
+          "intensity": 0.75,
+          "description": "Certain he will never measure up to his brothers."
+        },
+        {
+          "name": "humorous",
+          "intensity": 0.7,
+          "description": "Jokes first, especially when frightened."
+        }
+      ],
+      "speech_style": "Casual and slangy, full of 'blimey' and 'mental'. Blurts things out and then regrets them. Explains the wizarding world as if everyone already knows it.",
+      "values": [
+        "family",
+        "loyalty",
+        "not being pitied"
+      ],
+      "goals": [
+        "Be good at something before one of his brothers was",
+        "Make a friend who is his and not a Weasley family fixture"
+      ],
+      "backstory": "The sixth of seven Weasley children, raised in a cheerfully overcrowded house where everything he owns belonged to somebody else first.",
+      "relationships": [
+        {
+          "target_character_id": "harry-potter",
+          "type": "best friend",
+          "sentiment": 0.8,
+          "description": "Awed by the name, relieved to find an ordinary boy underneath it."
+        },
+        {
+          "target_character_id": "hermione-granger",
+          "type": "rival",
+          "sentiment": -0.3,
+          "description": "Her corrections land on exactly the nerve he is trying to protect."
+        },
+        {
+          "target_character_id": "draco-malfoy",
+          "type": "enemy",
+          "sentiment": -0.7,
+          "description": "Malfoy knows precisely how poor the Weasleys are and says so."
+        },
+        {
+          "target_character_id": "rubeus-hagrid",
+          "type": "friend",
+          "sentiment": 0.7,
+          "description": "Half the family has been to tea in his hut."
+        }
+      ],
+      "secrets": [
+        "His wand is Charlie's hand-me-down and barely works.",
+        "He is terrified of spiders and will not say why."
+      ],
+      "author_notes": "His humour is a defence. Let the insecurity show only when he is alone or cornered."
+    },
+    {
+      "id": "hermione-granger",
+      "name": "Hermione Granger",
+      "aliases": [],
+      "age": 11,
+      "gender": "female",
+      "appearance": "Bushy brown hair, rather large front teeth, always immaculately dressed in fresh school robes with a book under one arm.",
+      "personality_summary": "Fiercely intelligent and anxious to prove she belongs in a world she was not born into. Her bossiness is armour; underneath it she badly wants to be liked.",
+      "traits": [
+        {
+          "name": "diligent",
+          "intensity": 0.95,
+          "description": "Reads ahead, always."
+        },
+        {
+          "name": "anxious",
+          "intensity": 0.7,
+          "description": "Fear of failure drives most of her behaviour."
+        },
+        {
+          "name": "principled",
+          "intensity": 0.8,
+          "description": "Rules matter to her until people matter more."
+        }
+      ],
+      "speech_style": "Rapid, precise, full sentences with subordinate clauses. Quotes textbooks verbatim and corrects others mid-sentence.",
+      "values": [
+        "knowledge",
+        "justice",
+        "earning her place"
+      ],
+      "goals": [
+        "Be top of every class",
+        "Make a real friend"
+      ],
+      "backstory": "The only child of two Muggle dentists, she learned of magic by letter and memorised every set text before term began.",
+      "relationships": [
+        {
+          "target_character_id": "harry-potter",
+          "type": "friend",
+          "sentiment": 0.6,
+          "description": "Curious about his fame, irritated by his indifference to homework."
+        },
+        {
+          "target_character_id": "ron-weasley",
+          "type": "rival",
+          "sentiment": -0.2,
+          "description": "Finds him lazy; is stung that he does not like her."
+        },
+        {
+          "target_character_id": "severus-snape",
+          "type": "teacher",
+          "sentiment": -0.2,
+          "description": "Cannot understand why answering correctly is the wrong thing to do."
+        },
+        {
+          "target_character_id": "draco-malfoy",
+          "type": "enemy",
+          "sentiment": -0.5,
+          "description": "He has a word for what she is, and she has looked it up."
+        }
+      ],
+      "secrets": [
+        "She cries in the girls' bathroom more often than anyone knows.",
+        "She has already read about Nicolas Flamel somewhere and cannot remember where."
+      ],
+      "author_notes": "Her competence should read as loneliness, not showing off."
+    },
+    {
+      "id": "rubeus-hagrid",
+      "name": "Rubeus Hagrid",
+      "aliases": [
+        "Keeper of Keys and Grounds"
+      ],
+      "age": 63,
+      "gender": "male",
+      "appearance": "Twice as tall as a man and about five times as wide, with a wild tangle of black hair and beard, and hands the size of dustbin lids.",
+      "personality_summary": "Enormous, gentle and hopelessly sentimental about anything with teeth. He is fiercely loyal to Dumbledore and constitutionally incapable of keeping a secret for more than a page.",
+      "traits": [
+        {
+          "name": "kind",
+          "intensity": 0.95,
+          "description": "Adopts the lonely and the monstrous alike."
+        },
+        {
+          "name": "indiscreet",
+          "intensity": 0.8,
+          "description": "Says the thing, then says he should not have said the thing."
+        },
+        {
+          "name": "stubborn",
+          "intensity": 0.6,
+          "description": "Will not hear a word against the people he loves."
+        }
+      ],
+      "speech_style": "Broad West Country dialect written phonetically: 'yeh', 'ter', 'don' yeh worry'. Warm, rambling, and prone to trailing off when he realises what he has just let slip.",
+      "values": [
+        "loyalty to Dumbledore",
+        "creatures nobody else loves",
+        "Hogwarts"
+      ],
+      "goals": [
+        "Keep Harry safe",
+        "Own a dragon, just once"
+      ],
+      "backstory": "Expelled from Hogwarts in his third year for a crime he did not commit, and kept on as gamekeeper by a headmaster who believed him.",
+      "relationships": [
+        {
+          "target_character_id": "harry-potter",
+          "type": "guardian",
+          "sentiment": 0.9,
+          "description": "Carried him as a baby and has felt responsible ever since."
+        },
+        {
+          "target_character_id": "albus-dumbledore",
+          "type": "devoted",
+          "sentiment": 1.0,
+          "description": "Would not hear a word against him, and never has."
+        },
+        {
+          "target_character_id": "ron-weasley",
+          "type": "friend",
+          "sentiment": 0.7,
+          "description": "Knows the whole family."
+        },
+        {
+          "target_character_id": "severus-snape",
+          "type": "colleague",
+          "sentiment": -0.2,
+          "description": "Does not trust him, and has been told firmly to."
+        }
+      ],
+      "secrets": [
+        "He knows what is under the trapdoor, and who Nicolas Flamel is.",
+        "He wants a dragon egg he is not supposed to have."
+      ],
+      "author_notes": "The dialect is the character. Never let him speak in clean standard English, even when frightened."
+    },
+    {
+      "id": "albus-dumbledore",
+      "name": "Albus Dumbledore",
+      "aliases": [
+        "Headmaster"
+      ],
+      "age": 110,
+      "gender": "male",
+      "appearance": "Tall, thin and very old, with silver hair and beard long enough to tuck into his belt, half-moon spectacles, and a crooked nose that has clearly been broken.",
+      "personality_summary": "Serene, playful, and unreadable. He speaks in kindness and misdirection in equal measure, and makes decisions decades in advance that he explains to nobody.",
+      "traits": [
+        {
+          "name": "wise",
+          "intensity": 0.95,
+          "description": "Sees further than anyone, and says less than he sees."
+        },
+        {
+          "name": "whimsical",
+          "intensity": 0.7,
+          "description": "Announces terrible news and then talks about sweets."
+        },
+        {
+          "name": "secretive",
+          "intensity": 0.85,
+          "description": "Withholds out of care, which is still withholding."
+        }
+      ],
+      "speech_style": "Courteous and unhurried, with an old-fashioned formality broken by sudden absurdity. Asks questions instead of answering them. Never raises his voice.",
+      "values": [
+        "the greater good, carefully redefined",
+        "second chances",
+        "love as a force"
+      ],
+      "goals": [
+        "Prepare Harry without frightening him",
+        "Keep the Stone from the man who wants it"
+      ],
+      "backstory": "The most celebrated wizard of the age, who defeated Grindelwald and declines the Minister's job every few years.",
+      "relationships": [
+        {
+          "target_character_id": "harry-potter",
+          "type": "mentor",
+          "sentiment": 0.8,
+          "description": "Watches him more closely than Harry will ever know."
+        },
+        {
+          "target_character_id": "severus-snape",
+          "type": "trusted",
+          "sentiment": 0.7,
+          "description": "Trusts him absolutely, for reasons he explains to no one."
+        },
+        {
+          "target_character_id": "rubeus-hagrid",
+          "type": "trusted",
+          "sentiment": 0.9,
+          "description": "Gave him a home when nobody else would."
+        }
+      ],
+      "secrets": [
+        "He knows exactly why Harry survived, and will not say so for years.",
+        "He sees himself holding a pair of woollen socks in the Mirror of Erised, and that is not true."
+      ],
+      "author_notes": "He should feel warm and completely opaque. Never let him give a straight answer to an important question."
+    },
+    {
+      "id": "severus-snape",
+      "name": "Severus Snape",
+      "aliases": [
+        "Professor Snape"
+      ],
+      "age": 31,
+      "gender": "male",
+      "appearance": "Sallow, hook-nosed and greasy-haired, in black robes that billow behind him like something with wings.",
+      "personality_summary": "Cold, precise and openly unfair, with a talent for humiliation delivered quietly. Every kindness he does is disguised as something else.",
+      "traits": [
+        {
+          "name": "cold",
+          "intensity": 0.9,
+          "description": "Warmth would cost him something he cannot afford."
+        },
+        {
+          "name": "bitter",
+          "intensity": 0.85,
+          "description": "Fifteen years of a grudge, aimed at a child."
+        },
+        {
+          "name": "meticulous",
+          "intensity": 0.9,
+          "description": "Notices everything, forgives nothing."
+        }
+      ],
+      "speech_style": "Quiet, clipped, and lethally precise. Never shouts; the voice drops instead. Fond of the rhetorical question, and of long pauses before a name.",
+      "values": [
+        "control",
+        "competence",
+        "debts paid"
+      ],
+      "goals": [
+        "Keep the Stone safe",
+        "Make Potter's life difficult without ever quite endangering it"
+      ],
+      "backstory": "A Potions master with a past nobody at the school discusses, kept on by a headmaster who vouches for him and will not explain why.",
+      "relationships": [
+        {
+          "target_character_id": "harry-potter",
+          "type": "loathes",
+          "sentiment": -0.7,
+          "description": "Sees a face he hated wearing eyes he did not."
+        },
+        {
+          "target_character_id": "albus-dumbledore",
+          "type": "loyal",
+          "sentiment": 0.6,
+          "description": "The one person he answers to, resentfully."
+        },
+        {
+          "target_character_id": "hermione-granger",
+          "type": "teacher",
+          "sentiment": -0.3,
+          "description": "An insufferable know-it-all, and correct, which is worse."
+        },
+        {
+          "target_character_id": "draco-malfoy",
+          "type": "favourite",
+          "sentiment": 0.5,
+          "description": "His own house, and his own kind of pupil."
+        },
+        {
+          "target_character_id": "rubeus-hagrid",
+          "type": "colleague",
+          "sentiment": -0.2,
+          "description": "A useful idiot with a loose tongue."
+        }
+      ],
+      "secrets": [
+        "He is protecting Harry, and would rather die than have it noticed.",
+        "He is limping because he tried to get past the three-headed dog."
+      ],
+      "author_notes": "He must never be warm. His protection shows only as inconvenient competence at the right moment."
+    },
+    {
+      "id": "draco-malfoy",
+      "name": "Draco Malfoy",
+      "aliases": [],
+      "age": 11,
+      "gender": "male",
+      "appearance": "Pale, pointed and thin, with sleek white-blond hair and a permanent expression of having smelled something unpleasant.",
+      "personality_summary": "Snide, entitled and quicker to threaten than to fight. He repeats his father's opinions with total confidence and is smaller than he sounds.",
+      "traits": [
+        {
+          "name": "arrogant",
+          "intensity": 0.9,
+          "description": "Certain of his place, and needs to say so."
+        },
+        {
+          "name": "cowardly",
+          "intensity": 0.7,
+          "description": "Loud until someone is actually about to hit him."
+        },
+        {
+          "name": "resentful",
+          "intensity": 0.6,
+          "description": "Harry chose Weasley over him and he has not let it go."
+        }
+      ],
+      "speech_style": "Drawling and superior, trailing off into sneers. Quotes his father constantly. Sharpest when he has an audience.",
+      "values": [
+        "blood status",
+        "his father's approval",
+        "winning"
+      ],
+      "goals": [
+        "Make Potter regret refusing his hand",
+        "Get someone expelled"
+      ],
+      "backstory": "The only son of a wealthy old family who bought their way out of the last war, raised to believe the world is arranged in his favour.",
+      "relationships": [
+        {
+          "target_character_id": "harry-potter",
+          "type": "enemy",
+          "sentiment": -0.6,
+          "description": "Was refused in front of witnesses."
+        },
+        {
+          "target_character_id": "ron-weasley",
+          "type": "enemy",
+          "sentiment": -0.7,
+          "description": "Knows exactly how poor they are, and says so."
+        },
+        {
+          "target_character_id": "hermione-granger",
+          "type": "contempt",
+          "sentiment": -0.6,
+          "description": "Has a word for what she is."
+        },
+        {
+          "target_character_id": "severus-snape",
+          "type": "protected",
+          "sentiment": 0.5,
+          "description": "His Head of House, and reliably on his side."
+        }
+      ],
+      "secrets": [
+        "He is frightened of the Forbidden Forest and would rather be expelled than say so."
+      ],
+      "author_notes": "He is eleven. Let the bravado crack the moment he is genuinely in danger."
+    },
+    {
+      "id": "vernon-dursley",
+      "name": "Vernon Dursley",
+      "aliases": [
+        "Uncle Vernon"
+      ],
+      "age": 45,
+      "gender": "male",
+      "appearance": "Large, beefy and almost neckless, with a purple face and an enormous black moustache that quivers when he is angry, which is often.",
+      "personality_summary": "Aggressively ordinary and terrified of anything that is not. He manages fear by shouting at it, and shouts a great deal.",
+      "traits": [
+        {
+          "name": "bullying",
+          "intensity": 0.85,
+          "description": "Loud at anyone smaller than him."
+        },
+        {
+          "name": "frightened",
+          "intensity": 0.7,
+          "description": "Every rage is fear wearing a moustache."
+        },
+        {
+          "name": "conventional",
+          "intensity": 0.95,
+          "description": "The neighbours are a moral authority."
+        }
+      ],
+      "speech_style": "Blustering and repetitive, in capital letters. Refuses to say the word 'magic'. Retreats into complaints about drills and the news.",
+      "values": [
+        "normality",
+        "what the neighbours think",
+        "his own comfort"
+      ],
+      "goals": [
+        "Stamp out anything unnatural under his roof",
+        "Never think about his wife's sister again"
+      ],
+      "backstory": "A director of a drill firm in Little Whinging, who took in his nephew because there was nobody else and has resented it every day since.",
+      "relationships": [
+        {
+          "target_character_id": "harry-potter",
+          "type": "family",
+          "sentiment": -0.8,
+          "description": "An unnatural burden he never agreed to."
+        },
+        {
+          "target_character_id": "rubeus-hagrid",
+          "type": "afraid",
+          "sentiment": -0.9,
+          "description": "Was shouted down in his own house by a giant."
+        }
+      ],
+      "secrets": [
+        "He has read the letters, and knows exactly what Harry is."
+      ],
+      "author_notes": "Comic on the surface, genuinely frightening underneath. He is the reason Harry expects nothing from adults."
+    }
+  ],
+  "episodes": [
+    {
+      "episode_number": 1,
+      "title": "The Letters from No One",
+      "author_storyline": "Letters addressed to the cupboard under the stairs start arriving at Privet Drive. Vernon burns them, then boards up the letterbox, then flees the house entirely. Harry does not understand what is happening but understands that his uncle is frightened, which he has never seen before. End on the door coming off its hinges at midnight.",
+      "pacing": "normal",
+      "status": "queued"
+    },
+    {
+      "episode_number": 2,
+      "title": "The Keeper of Keys",
+      "author_storyline": "Hagrid gives Harry his letter, tells him he is a wizard, and tells him, over Vernon's shouting, what really happened to his parents. Harry has to reconcile a decade of being told he is nothing with being told he is famous. End with him asking a question about Voldemort that Hagrid clearly does not want to answer.",
+      "pacing": "slow",
+      "status": "queued"
+    },
+    {
+      "episode_number": 3,
+      "title": "Diagon Alley",
+      "author_storyline": "Hagrid takes Harry to Diagon Alley: money he did not know he had at Gringotts, robes where he meets a pale boy who talks about blood, and finally a wand that chooses him and visibly disturbs Ollivander. Hagrid also collects something small from a high-security vault and refuses to say what it is. Plant that vault.",
+      "pacing": "normal",
+      "status": "queued"
+    },
+    {
+      "episode_number": 4,
+      "title": "Platform Nine and Three-Quarters",
+      "author_storyline": "Harry finds the platform with the help of a red-haired family, meets Ron on the train, and meets Hermione, who is looking for a toad and finds two boys eating sweets instead. Draco arrives to offer Harry his friendship and is refused. End with the castle coming into view across the lake.",
+      "pacing": "normal",
+      "status": "queued"
+    },
+    {
+      "episode_number": 5,
+      "title": "The Sorting",
+      "author_storyline": "The Sorting Hat hesitates over Harry far longer than over anyone else, and the whole hall notices. Ron goes to Gryffindor with visible relief; Draco is in Slytherin before the hat touches his head. At the feast Harry's scar burns while a teacher at the staff table is looking at him.",
+      "pacing": "normal",
+      "status": "queued"
+    },
+    {
+      "episode_number": 6,
+      "title": "Potions and Grudges",
+      "author_storyline": "Snape's first lesson is an ambush aimed squarely at Harry, and Hermione's raised hand makes everything worse. Afterwards Hagrid tries to explain Snape away and lets slip that the third-floor corridor is about something being kept safe. Harry connects it to the vault Hagrid emptied.",
+      "pacing": "slow",
+      "status": "queued"
+    },
+    {
+      "episode_number": 7,
+      "title": "The Midnight Duel",
+      "author_storyline": "Draco challenges Harry to a duel and does not turn up; Filch nearly does. Fleeing, the four of them end up behind a locked door on the third floor, in front of an enormous three-headed dog standing on a trapdoor. Hermione is the only one who notices the trapdoor.",
+      "pacing": "fast",
+      "status": "queued"
+    },
+    {
+      "episode_number": 8,
+      "title": "Hallowe'en",
+      "author_storyline": "A troll gets into the castle. Ron says something unforgivable about Hermione; she spends the evening crying in a bathroom and is therefore exactly where the troll goes. Harry and Ron knock it out badly and Hermione lies to a teacher to cover for them. Three become friends.",
+      "pacing": "fast",
+      "status": "queued"
+    },
+    {
+      "episode_number": 9,
+      "title": "Nicolas Flamel",
+      "author_storyline": "Snape is limping, and Harry is convinced he is trying to get past the dog. The three hunt for who Nicolas Flamel is through the library and the restricted section, and find him at last on a Chocolate Frog card that has been in Harry's pocket since the train. Something is being guarded, and it is worth killing for.",
+      "pacing": "slow",
+      "status": "queued"
+    },
+    {
+      "episode_number": 10,
+      "title": "The Mirror of Erised",
+      "author_storyline": "Hiding from Filch, Harry finds a mirror that shows him his parents, and goes back to it three nights running. Dumbledore finds him there, moves the mirror, and tells him something gentle and unhelpful about the difference between what you want and what you have. End on Harry choosing to stop looking.",
+      "pacing": "slow",
+      "status": "queued"
+    }
+  ]
+}
