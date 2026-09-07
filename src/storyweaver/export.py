@@ -24,8 +24,21 @@ def episode_title(episode: Episode) -> str:
 
 
 def episode_body(episode: Episode) -> str:
-    """The prose alone, with the assembled header removed."""
-    return _HEADER.sub("", episode.final_text, count=1).strip()
+    """The prose alone, with the assembled header and artefacts removed."""
+    body = _HEADER.sub("", episode.final_text, count=1).strip()
+    # Fix literal escape sequences and API junk from episodes saved before the
+    # writer cleanup was added.
+    body = body.replace("\\n", "\n").replace("\\t", "\t")
+    body = re.sub(
+        r"""(?:extras|additional_kwargs|response_metadata|safety_ratings|usage_metadata)"""
+        r"""['"]?\s*[:=]\s*\{[^}]{20,}\}""",
+        "",
+        body,
+        flags=re.DOTALL,
+    )
+    body = re.sub(r"""['"]?signature['"]?\s*[:=]\s*['"][A-Za-z0-9+/=]{40,}['"]""", "", body)
+    body = re.sub(r"\n{3,}", "\n\n", body)
+    return body.strip()
 
 
 # --------------------------------------------------------------------------

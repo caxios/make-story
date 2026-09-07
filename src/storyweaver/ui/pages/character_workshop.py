@@ -26,9 +26,11 @@ with st.sidebar:
     selected = st.radio(
         "Character",
         options,
-        format_func=lambda i: project.get_character(i).name if project.get_character(i) else i,
+        format_func=lambda i: f"{project.get_character(i).name}" if project.get_character(i) else i,
         label_visibility="collapsed",
     )
+    if project.get_character(selected):
+        components.hint(f"ID: {selected}")
 
 character = project.get_character(selected)
 
@@ -122,6 +124,7 @@ if character is None:
 # --- Edit ------------------------------------------------------------------
 
 st.subheader(character.name)
+components.hint(f"ID: {character.id}")
 
 identity_tab, traits_tab, relations_tab, secrets_tab, io_tab = st.tabs(
     ["Identity", "Traits & goals", "Relationships", "Secrets", "Import / export"]

@@ -5,6 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from storyweaver import export
+from storyweaver.agents.checkpoint import CheckpointStore
 from storyweaver.ui import components, state
 
 components.load_styles()
@@ -34,10 +35,60 @@ with st.sidebar:
 
 episode = project.get_episode(selected)
 
-columns = st.columns([2, 1, 1])
+columns = st.columns([3, 1, 1, 1, 1])
 columns[0].markdown(f"### Episode {episode.episode_number}: {episode.title or '(untitled)'}")
 compare = columns[1].toggle("Side by side", help="Show the outline you wrote alongside the prose.")
 editing = columns[2].toggle("Edit mode")
+
+# --- Regenerate with confirmation ---
+regen_key = f"confirm_regen_{episode.episode_number}"
+if regen_key not in st.session_state:
+    st.session_state[regen_key] = False
+
+if st.session_state[regen_key]:
+    with columns[3]:
+        st.warning("Regen?", icon="⚠️")
+        confirm_cols = st.columns(2)
+        if confirm_cols[0].button("Yes", key=f"yes_reg_{episode.episode_number}", type="primary"):
+            checkpoints = CheckpointStore(state.get_store().state_dir)
+            checkpoints.clear(episode.episode_number)
+            project.update_episode(episode.model_copy(update={"status": "queued"}))
+            state.save_project()
+            st.session_state[regen_key] = False
+            st.session_state["target_episode_to_generate"] = episode.episode_number
+            st.session_state["start_generation"] = True
+            st.switch_page("pages/episode_queue.py")
+        if confirm_cols[1].button("No", key=f"no_reg_{episode.episode_number}"):
+            st.session_state[regen_key] = False
+            st.rerun()
+else:
+    if columns[3].button("🔄 Regenerate", key=f"reg_{episode.episode_number}"):
+        st.session_state[regen_key] = True
+        st.rerun()
+
+# --- Delete with confirmation ---
+delete_key = f"confirm_delete_{episode.episode_number}"
+if delete_key not in st.session_state:
+    st.session_state[delete_key] = False
+
+if st.session_state[delete_key]:
+    with columns[4]:
+        st.warning("Sure?", icon="⚠️")
+        confirm_cols = st.columns(2)
+        if confirm_cols[0].button("Yes", key=f"yes_del_{episode.episode_number}", type="primary"):
+            project.remove_episode(episode.episode_number)
+            project.renumber_episodes()
+            state.save_project()
+            st.session_state[delete_key] = False
+            state.queue_toast(f"Episode {episode.episode_number} deleted", "🗑️")
+            st.rerun()
+        if confirm_cols[1].button("No", key=f"no_del_{episode.episode_number}"):
+            st.session_state[delete_key] = False
+            st.rerun()
+else:
+    if columns[4].button("🗑️ Delete", key=f"del_{episode.episode_number}"):
+        st.session_state[delete_key] = True
+        st.rerun()
 
 components.hint(f"{len(episode.scenes)} scenes · {len(episode.final_text.split()):,} words")
 

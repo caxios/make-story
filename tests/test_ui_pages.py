@@ -8,6 +8,8 @@ a temp-directory `ProjectStore` so the author's real `data/` is never touched.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from streamlit.testing.v1 import AppTest
 
@@ -214,3 +216,94 @@ def test_the_dashboard_counts_a_written_episode(store, loaded):
     values = {m.label: m.value for m in app.metric}
     assert values["Episodes written"] == "1"
     assert values["Characters"] == "3"
+
+
+# ==========================================================================
+# Theming
+# ==========================================================================
+
+def _theme_config() -> dict:
+    # tomllib is 3.11+; tomli is the same parser, and is already a dependency
+    # of the toolchain on 3.10.
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        import tomli as tomllib
+
+    path = Path(__file__).resolve().parents[1] / ".streamlit" / "config.toml"
+    return tomllib.loads(path.read_text(encoding="utf-8"))["theme"]
+
+
+def test_the_streamlit_theme_is_configured():
+    """Without this file Streamlit renders light widgets on the styled page."""
+    theme = _theme_config()
+    assert theme["base"] == "dark"
+    for appearance in ("dark", "light"):
+        palette = theme[appearance]
+        assert palette["backgroundColor"]
+        assert palette["textColor"]
+        assert palette["primaryColor"]
+        assert palette["secondaryBackgroundColor"]
+
+
+def test_every_themed_pair_meets_wcag_aa():
+    """Colour choices are checked, not eyeballed."""
+    theme = _theme_config()
+
+    def luminance(value: str) -> float:
+        channels = [int(value.lstrip("#")[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+        channels = [
+            c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels
+        ]
+        return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+    def contrast(a: str, b: str) -> float:
+        first, second = luminance(a), luminance(b)
+        return (max(first, second) + 0.05) / (min(first, second) + 0.05)
+
+    failures = []
+    for appearance in ("dark", "light"):
+        palette = theme[appearance]
+        surfaces = [palette["backgroundColor"], palette["secondaryBackgroundColor"]]
+        inks = [
+            palette["textColor"], palette["primaryColor"], palette["linkColor"],
+            palette["greenColor"], palette["redColor"], palette["orangeColor"],
+            palette["grayColor"],
+        ]
+        for ink in inks:
+            for surface in surfaces:
+                if contrast(ink, surface) < 4.5:
+                    failures.append((appearance, ink, surface, round(contrast(ink, surface), 2)))
+
+    assert not failures, f"below AA: {failures}"
+
+
+def test_custom_hues_are_defined_for_both_appearances():
+    from storyweaver.ui.components import HUES
+
+    assert set(HUES) == {"dark", "light"}
+    assert set(HUES["dark"]) == set(HUES["light"])
+    assert HUES["dark"] != HUES["light"]  # a light theme needs darker accents
+
+
+def test_an_unknown_theme_falls_back_to_the_configured_default(store):
+    """`st.context.theme` is documented as unreliable on the first render."""
+    from storyweaver.ui import components
+
+    app = _run("dashboard.py", store)
+
+    assert not app.exception
+    assert components.theme_type() in ("dark", "light")
+
+
+def test_the_stylesheet_hardcodes_no_theme_colours():
+    """Neutrals must derive from currentColor, or they break in one appearance."""
+    from storyweaver.ui.components import STYLES_PATH
+
+    stylesheet = STYLES_PATH.read_text(encoding="utf-8")
+    body = "\n".join(
+        line for line in stylesheet.splitlines() if not line.strip().startswith(("*", "/*"))
+    )
+
+    assert "#" not in body, "a literal colour in styles.css will be wrong in one theme"
+    assert "currentColor" in body

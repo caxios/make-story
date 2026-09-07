@@ -1,150 +1,115 @@
-/* StoryWeaver — a writing desk, not a dashboard.
-   Warm amber on near-black, with a serif reserved for the prose itself. */
+/* StoryWeaver — only the things Streamlit's theme cannot express.
+ *
+ * The palette lives in .streamlit/config.toml, which themes every widget
+ * natively. Streamlit does not publish its theme as CSS variables, so nothing
+ * here may hardcode a colour that only works on one background:
+ *
+ *   - neutrals (panels, borders, muted text) are mixed from `currentColor`,
+ *     which is the theme's own text colour, so they follow it automatically;
+ *   - the few real hues (amber, and the status colours) are emitted from
+ *     Python in `components.load_styles`, which knows the active appearance.
+ */
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Serif+KR:wght@400;500;700&display=swap");
-
-:root {
-  --sw-ink: #f2ece1;
-  --sw-ink-soft: #b9b1a3;
-  --sw-ground: #14110e;
-  --sw-panel: #1e1a16;
-  --sw-panel-edge: #332c24;
-  --sw-amber: #d8a24a;
-  --sw-amber-dim: #8a6a2f;
-  --sw-good: #7fa66a;
-  --sw-warn: #d08b4a;
-  --sw-bad: #c4645c;
-}
-
-html, body, [class*="st-"], .stApp {
-  font-family: "Inter", "Pretendard", system-ui, sans-serif;
-}
-
-.stApp {
-  background: var(--sw-ground);
-  color: var(--sw-ink);
-}
-
-h1, h2, h3 {
-  letter-spacing: -0.01em;
-  color: var(--sw-ink);
-}
-
-h1 { font-weight: 600; }
-
-a, a:visited { color: var(--sw-amber); }
-
-/* --- Sidebar ------------------------------------------------------------ */
-
-section[data-testid="stSidebar"] {
-  background: var(--sw-panel);
-  border-right: 1px solid var(--sw-panel-edge);
-}
-
-/* --- Panels ------------------------------------------------------------- */
+/* --- Panels --------------------------------------------------------------
+   A card one step above the page. Tinted with the ink rather than painted a
+   fixed colour, so it lifts in dark mode and recedes in light mode. */
 
 .sw-panel {
-  background: var(--sw-panel);
-  border: 1px solid var(--sw-panel-edge);
-  border-radius: 10px;
-  padding: 1rem 1.15rem;
-  margin-bottom: 0.85rem;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 0.6rem;
+  padding: 0.85rem 1.05rem;
+  margin-bottom: 0.75rem;
 }
 
 .sw-hint {
-  color: var(--sw-ink-soft);
+  color: color-mix(in srgb, currentColor 68%, transparent);
   font-size: 0.86rem;
-  line-height: 1.5;
+  line-height: 1.55;
+  margin: 0.15rem 0 0.6rem;
 }
 
-/* --- Stat tiles --------------------------------------------------------- */
+.sw-panel .sw-hint { margin-bottom: 0; }
 
-div[data-testid="stMetric"] {
-  background: var(--sw-panel);
-  border: 1px solid var(--sw-panel-edge);
-  border-radius: 10px;
-  padding: 0.9rem 1rem;
-}
-
-div[data-testid="stMetricValue"] {
-  color: var(--sw-amber);
-  font-weight: 600;
-}
-
-/* --- Status pills ------------------------------------------------------- */
+/* --- Status pills --------------------------------------------------------
+   Colour never carries the meaning alone: the pill always spells the status
+   out, so it reads the same to anyone who cannot separate the hues. */
 
 .sw-pill {
   display: inline-block;
-  padding: 0.1rem 0.55rem;
+  padding: 0.05rem 0.55rem;
   border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   border: 1px solid currentColor;
+  white-space: nowrap;
 }
 
-.sw-pill.queued      { color: var(--sw-ink-soft); }
+.sw-pill.queued      { color: color-mix(in srgb, currentColor 65%, transparent); }
 .sw-pill.in_progress { color: var(--sw-warn); }
 .sw-pill.completed   { color: var(--sw-good); }
-.sw-pill.open        { color: var(--sw-amber); }
+.sw-pill.open        { color: var(--sw-accent); }
 .sw-pill.progressing { color: var(--sw-warn); }
 .sw-pill.resolved    { color: var(--sw-good); }
 .sw-pill.stale       { color: var(--sw-bad); }
 
-/* --- Reading room ------------------------------------------------------- */
+/* --- Reading room --------------------------------------------------------
+   The one page that is not a tool: a single column of prose at a comfortable
+   measure, in a serif, with room to breathe. */
 
 .sw-prose {
-  font-family: "Noto Serif KR", "Iowan Old Style", Georgia, serif;
-  font-size: 1.12rem;
-  line-height: 2.0;
-  max-width: 42rem;
+  /* An installed Korean serif is preferred over a webfont: the Reading Room
+     then renders correctly offline, and Korean and Latin share one face. */
+  font-family: "Noto Serif KR", "Nanum Myeongjo", AppleMyungjo, Batang,
+    "Iowan Old Style", Georgia, serif;
+  font-size: 1.13rem;
+  line-height: 1.95;
+  max-width: 38rem;
   margin: 0 auto;
-  color: var(--sw-ink);
+}
+
+.sw-prose p {
+  margin: 0 0 1.3em;
   white-space: pre-wrap;
 }
 
-.sw-prose p { margin: 0 0 1.35em; }
-
-/* Dialogue lines sit slightly brighter, so speech reads apart from narration. */
+/* Dialogue sits a shade apart from narration, so speech separates at a glance
+   without the paragraph looking highlighted. */
 .sw-prose .sw-line {
-  color: #fdf6e8;
+  color: color-mix(in srgb, currentColor 88%, var(--sw-accent));
 }
 
 .sw-break {
   text-align: center;
-  color: var(--sw-amber-dim);
-  letter-spacing: 0.6em;
-  margin: 2.4rem 0;
+  color: var(--sw-accent);
+  opacity: 0.7;
+  letter-spacing: 0.55em;
+  text-indent: 0.55em;
+  margin: 2.3rem 0;
+  font-size: 0.85rem;
 }
 
 .sw-chapter-title {
-  font-family: "Noto Serif KR", Georgia, serif;
-  font-size: 1.5rem;
+  font-family: "Noto Serif KR", "Nanum Myeongjo", AppleMyungjo, Batang,
+    Georgia, serif;
+  font-size: 1.45rem;
+  font-weight: 600;
   text-align: center;
-  color: var(--sw-amber);
-  margin-bottom: 2rem;
+  color: var(--sw-accent);
+  margin: 0 0 2rem;
 }
 
-/* --- Generation checklist ---------------------------------------------- */
+/* --- Generation checklist ------------------------------------------------ */
 
 .sw-checklist {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.86rem;
-  line-height: 1.9;
-  color: var(--sw-ink-soft);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.85;
+  color: color-mix(in srgb, currentColor 72%, transparent);
 }
 
-.sw-checklist .sw-now { color: var(--sw-amber); }
-
-/* --- Buttons ------------------------------------------------------------ */
-
-.stButton > button[kind="primary"] {
-  background: var(--sw-amber);
-  border-color: var(--sw-amber);
-  color: #1b1509;
+.sw-checklist .sw-now {
+  color: var(--sw-accent);
   font-weight: 600;
-}
-
-.stButton > button[kind="primary"]:hover {
-  background: #e6b665;
-  border-color: var(--sw-amber);
 }

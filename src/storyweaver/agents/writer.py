@@ -7,6 +7,7 @@ this is the only agent whose output the reader actually sees.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Mapping, Sequence
 
 from storyweaver.agents import context
@@ -26,6 +27,52 @@ from storyweaver.models.style import describe_pacing
 logger = logging.getLogger(__name__)
 
 NO_MEMORY = "(no earlier episodes to carry forward)"
+
+# ---------------------------------------------------------------------------
+# Patterns that catch API metadata leaked into the model's text output.
+# These are not story content — they are envelope artefacts (Gemini signatures,
+# gRPC extras dicts, safety-rating blocks, etc.) that occasionally appear when
+# the model echoes parts of its own response object.
+# ---------------------------------------------------------------------------
+_API_JUNK_PATTERNS: list[re.Pattern[str]] = [
+    # "extras': {'signature': '…'}" or similar dict-like blobs
+    re.compile(
+        r"""(?:extras|additional_kwargs|response_metadata|safety_ratings|usage_metadata)"""
+        r"""['"]?\s*[:=]\s*\{[^}]{20,}\}""",
+        re.DOTALL,
+    ),
+    # Base64-ish signature strings that span 40+ characters
+    re.compile(r"""['"]?signature['"]?\s*[:=]\s*['"][A-Za-z0-9+/=]{40,}['"]"""),
+    # Stray "candidates_token_count" / "prompt_token_count" lines
+    re.compile(r"""['"]?\w+_token_count['"]?\s*[:=]\s*\d+"""),
+]
+
+
+def _clean_prose(raw: str) -> str:
+    """Sanitise text coming out of the LLM before it reaches the reader.
+
+    1. Strip leaked API / response-object metadata.
+    2. Turn literal escape sequences (``\\n``) into real whitespace — models
+       sometimes emit them inside quoted strings or structured output that was
+       accidentally concatenated.
+    """
+    text = raw
+
+    # 1. Remove API metadata junk
+    for pattern in _API_JUNK_PATTERNS:
+        text = pattern.sub("", text)
+
+    # 2. Literal escape sequences → real whitespace
+    #    Match a true backslash followed by 'n' or 't' — NOT an already-real
+    #    newline character.  `\\n` in a Python string literal is two chars:
+    #    a backslash and an 'n'.
+    text = text.replace("\\n", "\n")
+    text = text.replace("\\t", "\t")
+
+    # 3. Collapse runs of 3+ blank lines into at most 2
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    return text.strip()
 NO_PREVIOUS = "(this is the first scene of the episode — set the tone)"
 
 # How much of the previous scene the Writer sees. Enough to catch the voice and
@@ -164,7 +211,7 @@ def write_scene(
     model = telemetry.meter(llm or get_llm(stage="writer"), "writer")
     result = model.invoke(prompt)
     prose = getattr(result, "content", result)
-    return str(prose).strip()
+    return _clean_prose(str(prose))
 
 
 def write_transition(
@@ -196,7 +243,7 @@ def write_transition(
     )
     model = telemetry.meter(llm or get_llm(stage="transition"), "transition")
     result = model.invoke(prompt)
-    return str(getattr(result, "content", result)).strip()
+    return _clean_prose(str(getattr(result, "content", result)))
 
 
 def _location_name(scene: Scene, world: WorldLore) -> str:

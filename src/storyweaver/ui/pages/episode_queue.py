@@ -37,7 +37,7 @@ with queue_tab:
     for index, episode in enumerate(project.episodes):
         words = len(episode.final_text.split())
         header = f"**{episode.episode_number}.** {episode.title or '(untitled)'}"
-        columns = st.columns([6, 2, 1, 1, 1])
+        columns = st.columns([5, 2, 1, 1, 1, 1])
         columns[0].markdown(header)
         columns[1].html(
             components.status_pill(episode.status)
@@ -55,11 +55,42 @@ with queue_tab:
             project.move_episode(episode.episode_number, 1)
             state.save_project()
             st.rerun()
-        if columns[4].button("🗑️", key=f"del_{episode.episode_number}"):
-            project.remove_episode(episode.episode_number)
-            project.renumber_episodes()
+        if columns[4].button("🔄", key=f"requeue_{episode.episode_number}", help="Re-queue / Regenerate this episode"):
+            checkpoints.clear(episode.episode_number)
+            project.update_episode(episode.model_copy(update={"status": "queued"}))
             state.save_project()
+            st.session_state["target_episode_to_generate"] = episode.episode_number
+            state.queue_toast(f"Episode {episode.episode_number} queued for generation", "🔄")
             st.rerun()
+        if columns[5].button("🗑️", key=f"del_{episode.episode_number}"):
+            if episode.status == "completed":
+                st.session_state[f"confirm_queue_del_{episode.episode_number}"] = True
+                st.rerun()
+            else:
+                project.remove_episode(episode.episode_number)
+                project.renumber_episodes()
+                state.save_project()
+                st.rerun()
+
+        # Confirmation dialog for completed episodes
+        confirm_key = f"confirm_queue_del_{episode.episode_number}"
+        if st.session_state.get(confirm_key, False):
+            st.warning(
+                f"Episode {episode.episode_number} is already **completed** "
+                f"({len(episode.final_text.split()):,} words). Delete it?",
+                icon="⚠️",
+            )
+            confirm_cols = st.columns([1, 1, 6])
+            if confirm_cols[0].button("Yes, delete", key=f"yes_qdel_{episode.episode_number}", type="primary"):
+                project.remove_episode(episode.episode_number)
+                project.renumber_episodes()
+                state.save_project()
+                st.session_state[confirm_key] = False
+                state.queue_toast(f"Episode {episode.episode_number} deleted", "🗑️")
+                st.rerun()
+            if confirm_cols[1].button("Cancel", key=f"no_qdel_{episode.episode_number}"):
+                st.session_state[confirm_key] = False
+                st.rerun()
 
         with st.expander("Storyline", expanded=False):
             with st.form(f"edit_ep_{episode.episode_number}"):
@@ -91,21 +122,49 @@ with queue_tab:
 
     # --- Generation --------------------------------------------------------
 
-    next_episode = project.next_queued_episode()
-    if next_episode is None:
-        components.hint("Nothing is queued for generation.")
+    target_num = st.session_state.pop("target_episode_to_generate", None)
+
+    if not project.episodes:
+        components.hint("Nothing in the queue yet. Add an outline in the next tab.")
     elif not components.require_project(need_characters=True):
         pass
     else:
-        st.subheader(f"Generate Episode {next_episode.episode_number}")
+        st.subheader("Generate Episode")
+
+        ep_numbers = [e.episode_number for e in project.episodes]
+        default_index = 0
+        if target_num is not None and target_num in ep_numbers:
+            default_index = ep_numbers.index(target_num)
+        else:
+            first_queued = project.next_queued_episode()
+            if first_queued is not None and first_queued.episode_number in ep_numbers:
+                default_index = ep_numbers.index(first_queued.episode_number)
+            elif ep_numbers:
+                default_index = len(ep_numbers) - 1
+
+        selected_ep_num = st.selectbox(
+            "Select episode to generate",
+            ep_numbers,
+            index=default_index,
+            format_func=lambda n: f"Episode {n}: {project.get_episode(n).title or '(untitled)'} [{project.get_episode(n).status}]",
+        )
+
+        target_episode = project.get_episode(selected_ep_num)
+
+        if target_episode.status == "completed":
+            components.hint("⚠️ This episode is already completed. Generating it again will overwrite the existing story text.")
+            btn_label = f"🔄 Regenerate Episode {target_episode.episode_number}"
+        else:
+            btn_label = f"✨ Generate Episode {target_episode.episode_number}"
+
         columns = st.columns([2, 1])
         max_turns = columns[1].number_input(
             "Turns per scene", min_value=2, max_value=40, value=12,
             help="The cap. A scene usually ends earlier, when its objective is met.",
         )
-        resumable = checkpoints.load(next_episode.episode_number)
+        resumable = checkpoints.load(target_episode.episode_number)
         if resumable and resumable.matches(
-            next_episode.episode_number, next_episode.author_storyline
+            target_episode.episode_number, target_episode.author_storyline
         ):
             components.hint(
                 f"Resuming from scene {resumable.current_scene_index + 1} — "
@@ -113,21 +172,24 @@ with queue_tab:
             )
 
         triggered = columns[0].button(
-            f"✨ Generate Episode {next_episode.episode_number}",
+            btn_label,
             type="primary",
             use_container_width=True,
         ) or st.session_state.pop("start_generation", False)
 
         if triggered:
+            if target_episode.status == "completed":
+                checkpoints.clear(target_episode.episode_number)
+
             memory = state.get_memory()
-            progress = GenerationProgress(episode_number=next_episode.episode_number)
+            progress = GenerationProgress(episode_number=target_episode.episode_number)
             st.session_state[state.PROGRESS] = progress
 
-            project.update_episode(next_episode.model_copy(update={"status": "in_progress"}))
+            project.update_episode(target_episode.model_copy(update={"status": "in_progress"}))
             state.save_project()
 
             with st.status(
-                f"Generating Episode {next_episode.episode_number}…", expanded=True
+                f"Generating Episode {target_episode.episode_number}…", expanded=True
             ) as status:
                 checklist = st.empty()
                 bar = st.progress(0.0)
@@ -143,13 +205,13 @@ with queue_tab:
                     progress.update(node, pipeline_state)
                     show()
 
-                label = f"episode {next_episode.episode_number}"
+                label = f"episode {target_episode.episode_number}"
                 # Outside the try, so a run that fails halfway still reports what
                 # it spent getting there.
                 with telemetry.record_usage(label) as usage:
                     try:
                         done, final = episode_runner.run_episode(
-                            next_episode,
+                            target_episode,
                             project.world,
                             project.character_map(),
                             style=project.style,
@@ -162,11 +224,11 @@ with queue_tab:
                         progress.note_failed(f"Generation failed: {error}")
                         show()
                         project.update_episode(
-                            next_episode.model_copy(update={"status": "queued"})
+                            target_episode.model_copy(update={"status": "queued"})
                         )
                         state.save_project()
                         status.update(label="Generation failed", state="error")
-                        if checkpoints.load(next_episode.episode_number):
+                        if checkpoints.load(target_episode.episode_number):
                             st.info(
                                 "The scenes finished before the failure are saved. "
                                 "Generate again to pick up from there."
@@ -189,7 +251,7 @@ with queue_tab:
                 with st.expander(f"What this cost — {usage.total_tokens:,} tokens"):
                     st.code(usage.report(), language="text")
 
-            if project.get_episode(next_episode.episode_number).status == "completed":
+            if project.get_episode(target_episode.episode_number).status == "completed":
                 if st.button("📖 Read it", type="primary"):
                     st.switch_page("pages/reading_room.py")
 
