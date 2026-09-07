@@ -33,6 +33,27 @@ In the app, open **⚙️ Settings → Project → Start over** and load a bundl
 — the small sample, or the 10-episode Wizarding World — then go to **📝 Episode
 Queue** and press Generate.
 
+### The HTTP API
+
+The same core is also served over REST, for a browser front end:
+
+```bash
+uvicorn storyweaver.server:app --reload --port 8000
+```
+
+Interactive docs at <http://localhost:8000/docs>. It reads and writes the same
+`data/` directory as the Streamlit app, so the two stay in step. Generation
+streams over Server-Sent Events at `GET /api/generation/stream/{episode}`.
+
+### The web app
+
+```bash
+cd frontend && npm install && npm run dev     # with the API running above
+```
+
+A Vite + React + TypeScript studio at <http://localhost:5173>, proxying `/api`
+to port 8000.
+
 ---
 
 ## What it does
@@ -91,7 +112,7 @@ Generation reports real progress, driven by the pipeline itself:
 ## Command line
 
 ```bash
-pytest                                        # 309 tests, no API key and no network
+pytest                                        # 361 tests, no API key and no network
 python -m storyweaver.smoke_test              # is the model binding working?
 python -m storyweaver.demo_scene --two        # one scene, printed
 python -m storyweaver.demo_episode --memory   # one episode, with continuity
@@ -114,12 +135,20 @@ src/storyweaver/
   telemetry.py       per-stage token and cost accounting
   storage.py         atomic writes, backups
   export.py          TXT / Markdown / DOCX, whole-story assembly
+  server.py          FastAPI app: CORS, lifespan, /api/health
+  api/               REST + SSE routes (project, world, characters, episodes,
+                     generation, memory, export)
   models/            WorldLore, CharacterProfile, Episode, WritingStyle, memory
   agents/            director, character, scene_runner, lore_checker, writer,
                      episode_runner, checkpoint, prompts/
   memory/            manager, vector_store, structured_store, plot_tracker,
                      summarizer
   ui/                Streamlit workbench (app.py, pages/, project.py, progress.py)
+frontend/            Vite + React + TypeScript studio
+  src/types/         the domain, mirrored from the Pydantic models
+  src/api/           typed REST client and the generation stream hook
+  src/components/    shell, toasts
+  src/pages/
 data/
   examples/          bundled datasets
   project.json       your story (gitignored)

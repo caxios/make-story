@@ -27,7 +27,7 @@ Rules of this world that always hold:
 {previous_prose}
 
 ## Writing Guidelines
-1. Write in {perspective}.{pov_line}
+1. Write in {perspective}, in {tense}.{pov_line}
 2. SHOW, don't tell. A log entry of "thought: Harry felt nervous" becomes prose
    with physical sensation and imagery — not the word "nervous".
 3. Weave narration BETWEEN dialogue lines. Describe body language, setting

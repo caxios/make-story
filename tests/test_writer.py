@@ -9,6 +9,15 @@ from storyweaver.models import WritingStyle
 
 PROSE = "The compartment smelled of soot and sugar quills.\n\nRon slid the door shut behind him."
 
+# A whole chapter that arrived wrapped in its own response envelope — a real
+# shape seen in saved output, kept here verbatim as a raw string so the
+# escaping is the escaping the model actually emitted.
+LEAKED = (
+    r"""[{'type': 'text', 'text': 'The corridor was cold.\n\n"""
+    r"""\"Who\'s there?\" she said.\n\nNo one answered.', """
+    r"""'signature': 'aGVsbG8gd29ybGQgdGhpcyBpcyBhIHNpZ25hdHVyZSBibG9iIGxvbmc='}]"""
+)
+
 
 def _prose_llm(scripted_llm, text: str = PROSE):
     return scripted_llm(str=lambda prompt, index: text)
@@ -131,3 +140,58 @@ def test_write_scene_rejects_an_empty_log(world, characters, two_character_scene
 
     with pytest.raises(ValueError, match="empty interaction log"):
         writer.write_scene(two_character_scene, world, characters, entries=[], llm=llm)
+
+
+# ==========================================================================
+# Leaked response envelopes
+#
+# A structured-output response occasionally reaches us stringified instead of
+# unwrapped, taking the whole chapter with it. None of it may survive to a
+# reader, and no ordinary prose may be mistaken for it.
+# ==========================================================================
+
+
+def test_a_stringified_content_block_list_is_unwrapped():
+    cleaned = writer._clean_prose(LEAKED)
+
+    assert cleaned.startswith("The corridor was cold.")
+    assert cleaned.endswith("No one answered.")
+    assert "'type'" not in cleaned
+    assert "signature" not in cleaned
+    assert "\\n" not in cleaned  # the escapes became real paragraph breaks
+    assert "\n\n" in cleaned  # and real paragraph breaks are what is left
+    assert "Who's there?" in cleaned  # and the escaped apostrophe came back
+
+
+def test_a_header_line_above_the_leaked_list_does_not_stop_the_unwrap():
+    """The model sometimes prints a header before the envelope it leaked."""
+    raw = "[Episode 1: 1]\n\n[{'type': 'text', 'text': 'It began at dusk.'}]"
+
+    assert writer._clean_prose(raw) == "It began at dusk."
+
+
+def test_several_content_blocks_are_joined_as_paragraphs():
+    raw = "[{'type': 'text', 'text': 'First.'}, {'type': 'text', 'text': 'Second.'}]"
+
+    assert writer._clean_prose(raw) == "First.\n\nSecond."
+
+
+def test_ordinary_prose_that_mentions_text_is_left_alone():
+    """The unwrapper must not fire on a chapter that merely uses the words."""
+    raw = "She read the text again. 'type' was the wrong word for it."
+
+    assert writer._clean_prose(raw) == raw
+
+
+def test_a_written_scene_is_cleaned_before_it_is_returned(
+    scripted_llm, world, characters, two_character_scene, sample_entries
+):
+    """The unwrapping has to happen on the real path, not just in the helper."""
+    llm = scripted_llm(str=lambda prompt, index: LEAKED)
+
+    prose = writer.write_scene(
+        two_character_scene, world, characters, entries=sample_entries, llm=llm
+    )
+
+    assert prose.startswith("The corridor was cold.")
+    assert "signature" not in prose

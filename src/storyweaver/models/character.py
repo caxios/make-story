@@ -27,6 +27,9 @@ class CharacterProfile(BaseModel):
 
     id: str                         # unique slug, e.g. "harry-potter"
     name: str
+    # Where they stand in the story: "protagonist", "antagonist", "supporting",
+    # "mentor", ... Free text, because a serial invents its own roles.
+    role: str = ""
     aliases: list[str] = Field(default_factory=list)
     age: int | None = None
     gender: str | None = None

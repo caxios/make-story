@@ -48,28 +48,63 @@ _API_JUNK_PATTERNS: list[re.Pattern[str]] = [
 ]
 
 
+# A LangChain content-block list that reached us stringified rather than
+# unwrapped: `[{'type': 'text', 'text': '…the whole chapter…'}, …]`. The prose
+# is the `text` value, in Python-repr form — escapes and all.
+_CONTENT_BLOCK_MARKER = re.compile(r"""\[\s*\{\s*['"]type['"]\s*:\s*['"]text['"]""")
+_CONTENT_BLOCK = re.compile(r"""['"]text['"]\s*:\s*'((?:[^'\\]|\\.)*)'""")
+
+
+def _unwrap_content_blocks(text: str) -> str:
+    """Pull the prose out of a stringified content-block list.
+
+    Nothing changes unless the marker is actually there, so prose that merely
+    contains the word "text" is left alone. The marker is looked for anywhere
+    rather than at the start, because a header line sometimes precedes the
+    list the model leaked.
+    """
+    if not _CONTENT_BLOCK_MARKER.search(text):
+        return text
+    blocks = _CONTENT_BLOCK.findall(text)
+    if not blocks:
+        return text
+    return "\n\n".join(
+        # Undo the repr's escaping. Backslash-escapes last, or it would
+        # re-interpret the backslashes it just produced.
+        block.replace("\\n", "\n")
+        .replace("\\t", "\t")
+        .replace("\\'", "'")
+        .replace('\\"', '"')
+        .replace("\\\\", "\\")
+        for block in blocks
+    )
+
+
 def _clean_prose(raw: str) -> str:
     """Sanitise text coming out of the LLM before it reaches the reader.
 
-    1. Strip leaked API / response-object metadata.
-    2. Turn literal escape sequences (``\\n``) into real whitespace — models
+    1. Unwrap a stringified content-block list, if that is what arrived.
+    2. Strip leaked API / response-object metadata.
+    3. Turn literal escape sequences (``\\n``) into real whitespace — models
        sometimes emit them inside quoted strings or structured output that was
        accidentally concatenated.
     """
-    text = raw
+    # Unwrapping comes first: the junk patterns below would otherwise chew
+    # through the structure this needs to read.
+    text = _unwrap_content_blocks(raw)
 
-    # 1. Remove API metadata junk
+    # 2. Remove API metadata junk
     for pattern in _API_JUNK_PATTERNS:
         text = pattern.sub("", text)
 
-    # 2. Literal escape sequences → real whitespace
+    # 3. Literal escape sequences → real whitespace
     #    Match a true backslash followed by 'n' or 't' — NOT an already-real
     #    newline character.  `\\n` in a Python string literal is two chars:
     #    a backslash and an 'n'.
     text = text.replace("\\n", "\n")
     text = text.replace("\\t", "\t")
 
-    # 3. Collapse runs of 3+ blank lines into at most 2
+    # 4. Collapse runs of 3+ blank lines into at most 2
     text = re.sub(r"\n{3,}", "\n\n", text)
 
     return text.strip()
@@ -175,6 +210,7 @@ def build_prompt(
         ),
         interaction_log=log_text,
         perspective=style.describe_perspective(),
+        tense=style.describe_tense(),
         pov_line=pov_line,
         density=style.describe_density(),
         target_word_count=style.target_word_count_per_scene,

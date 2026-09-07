@@ -24,6 +24,15 @@ PROSE_DENSITIES = {
 }
 
 
+TENSES = {
+    "past": "past tense — the standard for narrative fiction",
+    "present": (
+        "present tense — immediate and close; keep it consistent, and never "
+        "slip back into the past except for genuine flashback"
+    ),
+}
+
+
 PACING = {
     "slow": (
         "Slow and introspective. Let moments breathe; favour interiority and sensory "
@@ -37,6 +46,11 @@ PACING = {
 }
 
 
+def describe_tense(tense: str) -> str:
+    """The tense as an instruction, falling back to the raw value."""
+    return TENSES.get(tense, tense)
+
+
 def describe_pacing(pacing: str) -> str:
     """Pacing as an instruction, falling back to the raw value."""
     return PACING.get(pacing, pacing)
@@ -47,6 +61,7 @@ class WritingStyle(BaseModel):
 
     perspective: str = "third_person_limited"   # or "first_person", "third_person_omniscient"
     pov_character_id: str | None = None         # for limited / first-person perspective
+    tense: str = "past"                         # "past" or "present"
     prose_density: str = "moderate"             # "sparse", "moderate", "lush"
     dialogue_ratio: float = Field(default=0.4, ge=0.0, le=1.0)  # rough dialogue-to-narration target
     target_word_count_per_scene: int = Field(default=1500, gt=0)
@@ -59,3 +74,6 @@ class WritingStyle(BaseModel):
 
     def describe_density(self) -> str:
         return PROSE_DENSITIES.get(self.prose_density, self.prose_density)
+
+    def describe_tense(self) -> str:
+        return describe_tense(self.tense)
