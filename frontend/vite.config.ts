@@ -17,7 +17,7 @@ export default defineConfig({
       // Everything under /api goes to the FastAPI backend, so the browser
       // never leaves this origin and CORS stays out of the dev loop.
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:8001',
         changeOrigin: true,
         // Generation is a Server-Sent Events stream: without this the proxy
         // buffers the whole run and the progress arrives all at once, at the end.
