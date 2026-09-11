@@ -609,13 +609,19 @@ def run_episode(
         # After the graph, not inside it: a failed summarization should not cost
         # the caller the chapter that was already written.
         try:
-            final["episode_memory"] = memory.summarize_and_record(
+            episode_memory = memory.summarize_and_record(
                 done,
                 world,
                 char_map,
                 language=final["writing_style"].language,
                 llm=(models or PipelineModels()).summarizer,
             )
+            final["episode_memory"] = episode_memory
+            # The summary also lives on the episode itself, so it is saved with
+            # the project, shown to the author, and editable by them — the
+            # memory stores hold a copy, not the only copy.
+            done = done.model_copy(update={"summary": episode_memory.summary})
+            final["episode"] = done
         except Exception:  # noqa: BLE001 — the episode itself is still good
             logger.exception(
                 "Episode %d was written but could not be recorded to memory",

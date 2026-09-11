@@ -64,7 +64,14 @@ class WritingStyle(BaseModel):
     tense: str = "past"                         # "past" or "present"
     prose_density: str = "moderate"             # "sparse", "moderate", "lush"
     dialogue_ratio: float = Field(default=0.4, ge=0.0, le=1.0)  # rough dialogue-to-narration target
-    target_word_count_per_scene: int = Field(default=1500, gt=0)
+    # Per scene. The unit follows `language`: for Korean (and other languages
+    # counted by character) this is 자, 공백 포함; for English it is words. The
+    # default of 1,400 자 across 3–4 scenes lands a 회차 at the Korean
+    # web-novel standard of 4,500–5,500 자.
+    #
+    # The field keeps its old name so existing `project.json` files load
+    # unchanged; `describe_target_length()` is what agents should ask.
+    target_word_count_per_scene: int = Field(default=1400, gt=0)
     language: str = "ko"                        # output language
     author_style_notes: str = ""                # e.g. "Write like Brandon Sanderson"
 
@@ -74,6 +81,32 @@ class WritingStyle(BaseModel):
 
     def describe_density(self) -> str:
         return PROSE_DENSITIES.get(self.prose_density, self.prose_density)
+
+    def counts_characters(self) -> bool:
+        """Whether this language is measured in characters rather than words.
+
+        Korean, Japanese and Chinese publishing all count characters, and a
+        model told to write "1,400 words" of Korean produces something three to
+        four times longer than intended, because it reads that as 어절.
+        """
+        return self.language.strip().lower()[:2] in {"ko", "ja", "zh"} or (
+            self.language.strip().lower()
+            in {"korean", "japanese", "chinese", "한국어", "日本語", "中文"}
+        )
+
+    def describe_target_length(self) -> str:
+        """The length instruction, in the unit this language is actually measured in."""
+        target = self.target_word_count_per_scene
+        # A band, not a point: a single number invites the model to stop dead on
+        # it, and the low end is what matters.
+        low = int(round(target * 0.9 / 50)) * 50
+        high = int(round(target * 1.1 / 50)) * 50
+        if not self.counts_characters():
+            return f"{low:,}–{high:,} words"
+        instruction = f"{low:,}–{high:,} characters, counting spaces"
+        if self.language.strip().lower()[:2] == "ko" or "한국" in self.language:
+            instruction += f" (공백 포함 {low:,}~{high:,}자)"
+        return instruction
 
     def describe_tense(self) -> str:
         return describe_tense(self.tense)

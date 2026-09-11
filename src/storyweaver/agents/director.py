@@ -15,8 +15,10 @@ from storyweaver.models import CharacterProfile, Episode, Scene, StoryBeat, Worl
 
 logger = logging.getLogger(__name__)
 
+# Three to four well-developed scenes is what a Korean web-novel 회차 carries at
+# 4,500–5,500 characters. Five scenes at that length overruns; two under-runs.
 DEFAULT_MIN_SCENES = 3
-DEFAULT_MAX_SCENES = 5
+DEFAULT_MAX_SCENES = 4
 NO_MEMORY = "(this is the first episode — nothing has been established yet)"
 
 

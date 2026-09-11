@@ -51,7 +51,7 @@ def test_prompt_carries_the_storyline_world_and_cast(episode, world, harry, herm
     assert "harry-potter" in prompt          # characters offered by id
     assert "hermione-granger" in prompt
     assert "wands are required" in prompt.lower() or "wand" in prompt
-    assert "3–5 scenes" in prompt            # min/max substituted
+    assert "3–4 scenes" in prompt            # min/max substituted
 
 
 def test_decompose_returns_numbered_scenes(episode, world, characters, scripted_llm):

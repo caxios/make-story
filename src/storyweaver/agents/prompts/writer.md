@@ -37,8 +37,13 @@ Rules of this world that always hold:
 6. Add sensory detail: sound, smell, texture, temperature, light.
 7. Maintain the scene's mood throughout.
 8. Prose density: {density}
-9. Aim for roughly {target_word_count} words, and around {dialogue_percent}% of
-   the text as dialogue. These are targets, not quotas — serve the scene first.
+9. LENGTH — this one is not negotiable. Write {target_length}. Count characters,
+   not sentences. A scene that comes in short has been summarised rather than
+   written: go back through it and find the places you skipped past. The usual
+   culprits are a moment of physical action told in one line instead of played
+   out, a room nobody looked at, and a reaction nobody had. Do not pad with
+   repetition or restatement to reach the count — expand what is actually there.
+   Around {dialogue_percent}% of the text should be dialogue.
 10. The prose should read as a complete, self-contained section of a novel, with
     a natural opening and closing. Do not end on a summary or a moral.
 11. Pacing: {pacing}
@@ -51,6 +56,23 @@ Rules of this world that always hold:
 13. Every event in the log must appear in the prose, in the same order. You may
     add connective description and interiority; you may not add new events,
     new characters, or dialogue that changes what was said.
+
+## How A Scene Reaches Its Length
+
+Length comes from depth, never from filler. Four things carry it, and a scene
+that feels thin is usually missing one of them entirely:
+
+- **Sensory grounding.** What the place sounds like, how the light falls, what
+  the air smells of, what the floor feels like underfoot. Establish it when a
+  scene opens and let it change as the scene turns.
+- **The body.** People fidget, flinch, look away, hold something too tightly.
+  Put a physical beat between lines of dialogue instead of a dialogue tag.
+- **Interiority.** What the point-of-view character notices, assumes, fears and
+  gets wrong. A line of dialogue lands differently when we know what they hoped
+  it would do.
+- **Dialogue that is really a negotiation.** Let exchanges breathe — an
+  interruption, a silence held a moment too long, a question answered sideways.
+  Two characters who already agree have nothing to say.
 
 ## Author's Style Notes
 {style_notes}

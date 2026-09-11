@@ -622,3 +622,94 @@ def test_a_failed_generation_still_records_what_it_spent(client, loaded, monkeyp
     body = client.get("/api/telemetry").json()
     assert body["total_tokens"] == 1000
     assert body["by_stage"]["director"] == 1000
+
+
+# ==========================================================================
+# Episode summaries
+# ==========================================================================
+
+
+def test_a_summary_can_be_edited_by_the_author(client, project_store, loaded):
+    """The summary steers every later episode, so the author gets the last word."""
+    response = client.put("/api/episodes/1", json={"summary": "동혁이 시월을 숨겼다."})
+
+    assert response.status_code == 200
+    assert project_store.load().get_episode(1).summary == "동혁이 시월을 숨겼다."
+
+
+def test_summarizing_needs_the_memory_layer(client, loaded):
+    assert client.post("/api/episodes/1/summarize").status_code == 503
+
+
+def test_an_unwritten_episode_has_nothing_to_summarize(client, loaded, memory):
+    deps.set_memory(memory)
+
+    response = client.post("/api/episodes/2/summarize")
+
+    assert response.status_code == 409
+    assert "not been written" in response.json()["detail"]
+
+
+def test_summarizing_writes_the_summary_onto_the_episode(
+    client, project_store, loaded, memory, monkeypatch
+):
+    from storyweaver.memory import manager as manager_module
+    from storyweaver.memory.summarizer import EpisodeMemory
+
+    deps.set_memory(memory)
+    monkeypatch.setattr(
+        manager_module,
+        "summarize_episode",
+        lambda *args, **kwargs: EpisodeMemory(summary="새로 쓴 요약."),
+    )
+
+    response = client.post("/api/episodes/1/summarize")
+
+    assert response.status_code == 200
+    assert response.json()["summary"] == "새로 쓴 요약."
+    # On the project on disk, not only in the memory stores.
+    assert project_store.load().get_episode(1).summary == "새로 쓴 요약."
+    assert memory.get_episode_summary(1) == "새로 쓴 요약."
+
+
+def test_a_generation_leaves_its_summary_on_the_episode(
+    client, project_store, loaded, memory, monkeypatch
+):
+    """Plan §4: the summary belongs on the Episode, not only in ChromaDB."""
+    from storyweaver.agents import episode_runner
+    from storyweaver.memory import manager as manager_module
+    from storyweaver.memory.summarizer import EpisodeMemory
+
+    deps.set_memory(memory)
+    monkeypatch.setattr(
+        manager_module,
+        "summarize_episode",
+        lambda *args, **kwargs: EpisodeMemory(summary="1화에서 벌어진 일."),
+    )
+
+    real_run = episode_runner.run_episode
+
+    def run_with_memory(episode, world, characters, **kwargs):
+        return real_run(
+            episode.model_copy(update={"final_text": "끝은 이랬다.", "status": "completed"}),
+            world,
+            characters,
+            **kwargs,
+        )
+
+    # Only the graph is stubbed; the memory step after it is the real one.
+    monkeypatch.setattr(
+        episode_runner,
+        "stream_episode",
+        lambda episode, *a, **k: iter(
+            [("assemble_episode", {"episode": episode, "writing_style": loaded.style})]
+        ),
+    )
+    monkeypatch.setattr(generation.episode_runner, "run_episode", run_with_memory)
+
+    events = _sse(client.get("/api/generation/stream/2"))
+    name, payload = events[-1]
+
+    assert name == "complete", payload
+    assert payload["episode"]["summary"] == "1화에서 벌어진 일."
+    assert project_store.load().get_episode(2).summary == "1화에서 벌어진 일."

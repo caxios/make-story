@@ -301,3 +301,33 @@ def tracker(tmp_path) -> PlotThreadTracker:
 @pytest.fixture
 def store(tmp_path) -> StructuredStore:
     return StructuredStore(tmp_path / "state")
+
+
+# --------------------------------------------------------------------------
+# No test may reach the real model
+# --------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _no_live_model_calls(monkeypatch):
+    """Fail loudly instead of quietly spending the author's Gemini quota.
+
+    Agents take an optional `llm=`, and the suite passes a stub everywhere it
+    remembers to. "Everywhere it remembers to" is the problem: a test that
+    forgets — or that reaches a code path binding `summarize_episode` at import
+    time, so a `monkeypatch` on the module misses it — will happily make a real
+    API call, because a developer's `.env` has a real key in it.
+
+    `build_model` is the one place a real client is constructed, so blocking it
+    here closes the hole for every caller at once.
+    """
+    from storyweaver import llm
+
+    def refuse(*args, **kwargs):
+        raise AssertionError(
+            "A test tried to build a real Gemini model. Pass a stub `llm=`, or "
+            "patch the agent that is calling out — the suite must never spend "
+            "the author's quota."
+        )
+
+    llm.build_model.cache_clear()
+    monkeypatch.setattr(llm, "build_model", refuse)

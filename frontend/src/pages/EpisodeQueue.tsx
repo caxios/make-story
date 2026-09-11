@@ -440,6 +440,9 @@ function EpisodeCard({
               </span>
             </Badge>
             {completed && count > 0 && <Badge>{formatCount(count)} words</Badge>}
+            {completed && episode.summary.trim() && (
+              <Badge tone="accent">summarized</Badge>
+            )}
             {episode.pacing !== 'normal' && <Badge tone="accent">{episode.pacing}</Badge>}
             {resumable && <Badge tone="warn">resumable</Badge>}
           </div>
@@ -474,6 +477,17 @@ function EpisodeCard({
                 </li>
               ))}
             </ol>
+          )}
+
+          {expanded && completed && episode.summary.trim() && (
+            <div className="mt-3 rounded-lg border border-line bg-surface/60 px-3 py-2">
+              <p className="mb-1 text-[0.65rem] font-medium tracking-wide text-ink-muted uppercase">
+                What the next episode is told
+              </p>
+              <p className="line-clamp-4 text-xs leading-relaxed text-ink-muted">
+                {episode.summary}
+              </p>
+            </div>
           )}
         </div>
 

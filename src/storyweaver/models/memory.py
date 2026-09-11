@@ -37,4 +37,8 @@ class StoryMemory(BaseModel):
     active_plot_threads: list[str] = Field(default_factory=list)  # unresolved 떡밥
     resolved_plot_threads: list[str] = Field(default_factory=list)
     episode_summaries: dict[int, str] = Field(default_factory=dict)  # episode_number -> summary
+    # The literal closing passage of each episode. A summary says what happened;
+    # this says where everyone was standing when the curtain fell, which is what
+    # the next episode has to pick up from.
+    episode_closings: dict[int, str] = Field(default_factory=dict)
     character_memories: dict[str, CharacterMemory] = Field(default_factory=dict)

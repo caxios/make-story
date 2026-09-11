@@ -29,6 +29,9 @@ class EpisodeUpdate(BaseModel):
     pacing: str | None = None
     status: str | None = None
     final_text: str | None = None
+    # Editable: the author knows better than the summarizer what the next
+    # episode needs to remember, and this is what gets injected into it.
+    summary: str | None = None
 
 
 class MoveRequest(BaseModel):
@@ -129,3 +132,43 @@ def move_episode(episode_number: int, request: MoveRequest) -> list[Episode]:
         project.move_episode(episode_number, request.offset)
         deps.save_project(project)
     return project.episodes
+
+
+@router.post("/{episode_number}/summarize", response_model=Episode)
+def summarize_episode(episode_number: int) -> Episode:
+    """Re-read a finished chapter and rewrite its summary.
+
+    Worth doing after editing the prose by hand: the summary is what the next
+    episode is told about this one, so a stale summary quietly steers the whole
+    serial. Re-running it also refreshes the memory stores.
+    """
+    project = deps.get_project()
+    episode = deps.require_episode(project, episode_number)
+    if not episode.final_text.strip():
+        raise HTTPException(
+            status_code=409,
+            detail=f"Episode {episode_number} has not been written yet, so there is nothing to summarize",
+        )
+
+    memory = deps.require_memory()
+    try:
+        recorded = memory.summarize_and_record(
+            episode,
+            project.world,
+            project.character_map(),
+            language=project.style.language,
+        )
+    except Exception as error:  # noqa: BLE001 — reported to the author
+        raise HTTPException(
+            status_code=502, detail=f"The summarizer failed: {error}"
+        ) from error
+
+    with deps.write_lock():
+        # Reloaded rather than reused: summarizing is a model call, and the
+        # queue may have moved on while it ran.
+        current = deps.get_project()
+        latest = deps.require_episode(current, episode_number)
+        updated = latest.model_copy(update={"summary": recorded.summary})
+        current.update_episode(updated)
+        deps.save_project(current)
+    return updated

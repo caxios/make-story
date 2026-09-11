@@ -131,9 +131,12 @@ class StructuredStore:
         world_lore_updates: list[str] | None = None,
         opened_threads: list[str] | None = None,
         resolved_threads: list[str] | None = None,
+        closing: str = "",
     ) -> StoryMemory:
         story = self.get_story()
         story.episode_summaries[episode_number] = summary
+        if closing:
+            story.episode_closings[episode_number] = closing
         if world_lore_updates:
             story.world_lore_updates.extend(world_lore_updates)
         for thread in opened_threads or []:
@@ -149,6 +152,16 @@ class StructuredStore:
 
     def get_episode_summary(self, episode_number: int) -> str:
         return self.get_story().episode_summaries.get(episode_number, "")
+
+    def get_episode_closing(self, episode_number: int | None = None) -> tuple[int, str] | None:
+        """The closing passage of an episode, or of the latest one on record."""
+        closings = self.get_story().episode_closings
+        if episode_number is None:
+            episode_number = max(closings, default=None)
+        if episode_number is None:
+            return None
+        closing = closings.get(episode_number, "")
+        return (episode_number, closing) if closing else None
 
     def recent_episode_summaries(self, n_episodes: int = 3) -> list[tuple[int, str]]:
         """The last `n_episodes` summaries, oldest first so they read in order."""

@@ -103,14 +103,13 @@ function StylePanel() {
     }
   }
 
-  // The Writer is asked for "roughly N words". In Korean the model reads that
-  // as 어절, which run 3–4 characters each — so the same number means something
-  // very different depending on the language, and saying so is worth more than
-  // hiding it.
+  // The unit this target is in follows the language: Korean is measured in
+  // characters, English in words. `WritingStyle.describe_target_length` on the
+  // backend makes the same decision, and this label has to agree with it.
   const korean = draft.language.toLowerCase().startsWith('ko')
   const perScene = draft.target_word_count_per_scene
   const episodeLow = perScene * 3
-  const episodeHigh = perScene * 5
+  const episodeHigh = perScene * 4
 
   return (
     <Panel
@@ -179,7 +178,7 @@ function StylePanel() {
           />
           <div className="space-y-1.5">
             <TextField
-              label="Target words per scene"
+              label={korean ? 'Target characters per scene (공백 포함)' : 'Target words per scene'}
               type="number"
               min={100}
               max={6000}
@@ -187,7 +186,7 @@ function StylePanel() {
               value={perScene}
               onChange={(event) =>
                 patch({
-                  target_word_count_per_scene: Math.max(1, Number(event.target.value) || 1500),
+                  target_word_count_per_scene: Math.max(1, Number(event.target.value) || 1400),
                 })
               }
             />
@@ -199,21 +198,18 @@ function StylePanel() {
           <Gauge className="mt-0.5 size-4 shrink-0 text-ink-muted" aria-hidden />
           <div className="text-xs leading-relaxed text-ink-dim">
             <p>
-              The Director plans 3–5 scenes, so one episode lands around{' '}
+              The Director plans 3–4 scenes, so one episode lands around{' '}
               <span className="font-medium text-ink">
                 {formatCount(episodeLow)}–{formatCount(episodeHigh)}
               </span>{' '}
-              words.
+              {korean ? '자, 공백 포함' : 'words'}.
             </p>
             {korean && (
               <p className="mt-1.5 text-ink-muted">
-                In Korean the model reads &ldquo;words&rdquo; as 어절, which average 3–4
-                characters — so expect roughly{' '}
-                <span className="font-medium text-ink-dim">
-                  {formatCount(episodeLow * 3)}–{formatCount(episodeHigh * 4)}자
-                </span>
-                . A typical web-novel 회차 is about 5,000자, which is a target of roughly 400–500
-                words per scene.
+                A Korean web-novel 회차 is 4,500–5,500자, which is what the default 1,400자
+                per scene is set to hit. The Writer is instructed in characters rather than
+                words, because a model told &ldquo;1,400 words&rdquo; of Korean reads that as
+                어절 and overshoots three- to four-fold.
               </p>
             )}
           </div>

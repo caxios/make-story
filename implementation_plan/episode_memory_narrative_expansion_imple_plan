@@ -1,0 +1,139 @@
+# Implementation Plan: Narrative Expansion, Web Novel Length Anchoring & Episode Memory Continuity
+
+## Goal Description
+
+Enhance StoryWeaver's multi-agent writing pipeline so that:
+1. **Zero-Drop Scene Mapping**: When an author provides multiple plot beats or sequential events in the storyline, every beat is preserved and mapped into a distinct scene rather than skipping straight to the climax.
+2. **Narrative Expansion Protocol**: When an author provides only a brief, single-sentence outline, the Director automatically fleshes it out into a complete multi-scene arc using active character dynamics, world lore details, and previous episode consequences.
+3. **Korean Web Novel Length Anchoring**: Anchor the Writer agent to produce industry-standard chapter lengths (**4,500 – 5,500 Korean characters including spaces**, ~1,200–1,500 chars per scene) with balanced narration, dialogue, sensory description, and inner monologue.
+4. **Structured Per-Episode Summaries & Multi-Tier Memory Continuity**:
+   - Every completed episode generates and stores a structured summary directly on the `Episode` model and in the memory store.
+   - Future episodes automatically inject:
+     - **Tier 1 (Immediate Continuity)**: The last 1–2 episode summaries and exact closing situation (to seamlessly pick up where the story left off).
+     - **Tier 2 (Thematic RAG Retrieval)**: Semantic vector search against ChromaDB for relevant historical events, foreshadowing ("떡밥"), and character memories.
+   - The frontend (Reading Room & Episode Queue) displays the episode summary for author inspection and editing.
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Length & Scene Standards**:
+> - A standard Korean web novel chapter is **4,500 – 5,500 characters** (공백 포함 4,500~5,500자).
+> - We calibrate the Director to produce **3 to 4 well-developed scenes** per episode, and calibrate the Writer to output **1,200 to 1,500 Korean characters per scene**.
+
+> [!NOTE]
+> **Episode Model Schema**:
+> - We add `summary: str = ""` to `Episode` in `src/storyweaver/models/episode.py` and `frontend/src/types/storyweaver.ts`.
+> - This ensures summaries are visible, editable by the author, and persist directly inside `data/project.json`.
+
+---
+
+## Open Questions
+
+> [!TIP]
+> 1. **Summary Generation Timing**:
+>    - Option A (Recommended): Automatically generate the structured summary immediately upon episode assembly completion, and store it with the episode.
+>    - Option B: Allow the author to edit/regenerate the summary manually in the Reading Room.
+> 2. **Expansion Style for Brief Outlines**:
+>    - When an outline is very short (e.g. 1 sentence), should the Director prioritize **Character Relationship Drama** (conversations, friction, secrets) or **Atmospheric World Exploration** (travel, environment, lore encounters)? *(Default: Balanced 50/50)*.
+
+---
+
+## Proposed Changes
+
+### 1. Data Models & Schemas
+
+#### [MODIFY] [src/storyweaver/models/episode.py](file:///c:/Users/mrsim/make-story/src/storyweaver/models/episode.py)
+- Add `summary: str = Field(default="", description="Structured summary of key events and character changes")` to `Episode`.
+
+#### [MODIFY] [frontend/src/types/storyweaver.ts](file:///c:/Users/mrsim/make-story/frontend/src/types/storyweaver.ts)
+- Add `summary: string` to `interface Episode`.
+
+---
+
+### 2. Director Agent: Zero-Drop Mapping & Narrative Expansion
+
+#### [MODIFY] [src/storyweaver/agents/prompts/director.md](file:///c:/Users/mrsim/make-story/src/storyweaver/agents/prompts/director.md)
+- **Zero-Drop Rule**: Add strict directive: *"If the author's storyline contains multiple events, steps, or numbered items, YOU MUST allocate at least one dedicated scene to each event. NEVER skip intermediate steps or collapse everything into only the final climax."*
+- **Narrative Expansion Protocol**: Add step-by-step expansion instructions for sparse outlines:
+  1. *Scene 1 (Opening / Aftermath)*: React to previous episode events, character banter/friction, establish the current emotional baseline.
+  2. *Scene 2 (Inciting Movement / Obstacle)*: Characters begin moving toward the objective; introduce a minor hurdle, miscommunication, or atmospheric world detail.
+  3. *Scene 3 (Core Event / Climax)*: Execute the author's core storyline beat with high sensory engagement and stakes.
+  4. *Scene 4 (Falling Action & Hook)*: Address the immediate consequence of the action, shift character dynamics, and plant a hook/cliffhanger for the next episode.
+- **Continuity Integration**: Inject the immediate ending situation and unresolved threads from the previous episode as required scene anchors.
+
+#### [MODIFY] [src/storyweaver/agents/director.py](file:///c:/Users/mrsim/make-story/src/storyweaver/agents/director.py)
+- Update `DEFAULT_MIN_SCENES = 3`, `DEFAULT_MAX_SCENES = 4`.
+- Expand `build_prompt` to include previous episode's ending state and explicit summary context.
+
+---
+
+### 3. Writer Agent: Korean Web Novel Length Anchoring
+
+#### [MODIFY] [src/storyweaver/agents/prompts/writer.md](file:///c:/Users/mrsim/make-story/src/storyweaver/agents/prompts/writer.md)
+- Replace generic "word count" instructions with explicit Korean prose guidelines:
+  - **Length Requirement**: *"Aim for 1,200 to 1,500 Korean characters (공백 포함 1,200~1,500자) per scene. Do not summarize or rush."*
+  - **Show-Don't-Tell Ratio**: Deepen sensory descriptions (sounds, lighting, physical tension, environment) and internal reflections to achieve substantive novel pacing.
+  - **Dialogue Weaving**: Ensure character banter reflects established relationship dynamics with meaningful dialogue tags and physical action beats between lines.
+
+#### [MODIFY] [src/storyweaver/models/style.py](file:///c:/Users/mrsim/make-story/src/storyweaver/models/style.py)
+- Change default `target_word_count_per_scene` to represent Korean character targets (e.g. 1,400 chars) and update `WritingStyle` docstring.
+
+---
+
+### 4. Memory & Continuity Architecture
+
+#### [MODIFY] [src/storyweaver/memory/manager.py](file:///c:/Users/mrsim/make-story/src/storyweaver/memory/manager.py)
+- **Multi-Tier Director Context**:
+  - Enhance `build_director_context()`:
+    - **Tier 1 (Immediate Pick-up)**: Clearly demarcate the exact closing status of Episode $N-1$ (where characters are, what just happened, immediate mood).
+    - **Tier 2 (Chronological Arc)**: Summaries of the last 2–3 episodes in sequential order.
+    - **Tier 3 (Semantic RAG)**: Multi-query expansion combining author storyline, participating characters, and unresolved plot threads to fetch the top 5 most relevant historical interactions from ChromaDB.
+
+#### [MODIFY] [src/storyweaver/agents/episode_runner.py](file:///c:/Users/mrsim/make-story/src/storyweaver/agents/episode_runner.py)
+- In `run_episode` / `stream_episode`, after final text assembly:
+  - If summarization is active, save `memory.summary` directly onto `episode.summary` and persist in `project.json` via `ProjectStore`.
+
+---
+
+### 5. Backend API & Frontend UI
+
+#### [MODIFY] [src/storyweaver/api/episodes.py](file:///c:/Users/mrsim/make-story/src/storyweaver/api/episodes.py)
+- Ensure `summary` field is included in `GET /api/episodes` and `PUT /api/episodes/{number}`.
+- Add endpoint `POST /api/episodes/{number}/summarize` to allow on-demand re-summarization.
+
+#### [MODIFY] [frontend/src/pages/ReadingRoom.tsx](file:///c:/Users/mrsim/make-story/frontend/src/pages/ReadingRoom.tsx)
+- Add an expandable **"Episode Summary & Memory Recap"** section at the top of the reading room:
+  - Displays the 300–500 word structured summary for the chapter.
+  - Shows key events, active plot threads updated, and character emotional state changes.
+  - Allows authors to edit the summary to correct any memory nuances for future episodes.
+
+#### [MODIFY] [frontend/src/pages/EpisodeQueue.tsx](file:///c:/Users/mrsim/make-story/frontend/src/pages/EpisodeQueue.tsx)
+- Display a summary preview badge on completed episode cards.
+
+---
+
+## Verification Plan
+
+### Automated Tests
+- `tests/test_director_expansion.py`:
+  - Test 1: Single-sentence outline -> Director generates 3–4 scenes with distinct objectives and locations.
+  - Test 2: Multi-bullet outline (3 distinct events) -> Director preserves all 3 events across scenes.
+- `tests/test_episode_memory_continuity.py`:
+  - Test 1: Generate Episode 1 -> Verify `episode.summary` is populated and stored in ChromaDB + `project.json`.
+  - Test 2: Generate Episode 2 -> Verify Director context contains Episode 1 summary and previous closing state.
+
+### Manual Verification
+1. **Single-Sentence Input Test**:
+   - Queue an outline: *"해리가 비밀의 방 입구를 찾아 기숙사를 몰래 빠져나온다."*
+   - Trigger generation.
+   - Verify that the resulting text is **4,500+ characters**, has 3–4 coherent scenes (e.g. leaving dormitory, encounter in hallway, reaching the bathroom), and naturally weaves in character interactions.
+2. **Multi-Event Outline Test**:
+   - Queue an outline with 3 distinct beats: *(1) 연회장에서 말포이와 시비가 붙음 -> (2) 스네이프 교수에게 걸려 감점을 받음 -> (3) 기숙사로 돌아와 복수를 다짐함*.
+   - Trigger generation.
+   - Verify that all 3 events appear in the final chapter text and are not skipped.
+3. **Reading Room Summary Inspection**:
+   - Open the completed chapter in `http://localhost:5173/reading-room`.
+   - Verify that the summary panel shows key events and plot threads.
+   - Check next episode generation and confirm it references the previous chapter's summary.

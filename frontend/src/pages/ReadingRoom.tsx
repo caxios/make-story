@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import * as api from '@/api/client'
+import { EpisodeSummary } from '@/components/EpisodeSummary'
 import { DEFAULT_READER, Prose, type ReaderSettings } from '@/components/Prose'
 import { useToast } from '@/components/ToastContext'
 import {
@@ -41,6 +42,8 @@ import type { Episode } from '@/types/storyweaver'
 const READER_KEY = 'storyweaver.reader'
 
 const words = (text: string) => text.split(/\s+/).filter(Boolean).length
+/** Characters including spaces — the unit Korean web novels are measured in. */
+const characters = (text: string) => text.replace(/\r/g, '').length
 
 function loadReader(): ReaderSettings {
   try {
@@ -208,6 +211,7 @@ export function ReadingRoom() {
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="accent">Episode {episode.episode_number}</Badge>
               <Badge>{formatCount(count)} words</Badge>
+              <Badge>{formatCount(characters(episode.final_text))} chars</Badge>
               {episode.scenes.length > 0 && (
                 <Badge>
                   {episode.scenes.length} scene{episode.scenes.length === 1 ? '' : 's'}
@@ -238,6 +242,9 @@ export function ReadingRoom() {
             <IconButton icon={Trash2} title="Delete this chapter" onClick={() => setDeleting(true)} />
           </div>
         </header>
+
+        {/* --- What the next episode will be told about this one --- */}
+        <EpisodeSummary episode={episode} onChanged={refresh} />
 
         {/* --- The chapter --- */}
         {editing ? (

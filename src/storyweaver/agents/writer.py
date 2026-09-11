@@ -213,7 +213,7 @@ def build_prompt(
         tense=style.describe_tense(),
         pov_line=pov_line,
         density=style.describe_density(),
-        target_word_count=style.target_word_count_per_scene,
+        target_length=style.describe_target_length(),
         dialogue_percent=round(style.dialogue_ratio * 100),
         style_notes=style.author_style_notes or "(none)",
         language=style.language,

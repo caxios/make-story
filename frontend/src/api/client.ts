@@ -207,6 +207,7 @@ export interface EpisodeUpdate {
   pacing?: Pacing
   status?: Episode['status']
   final_text?: string
+  summary?: string
 }
 
 export const getEpisodes = () => request<Episode[]>('/api/episodes')
@@ -235,6 +236,16 @@ export const moveEpisode = (episodeNumber: number, offset: number) =>
 
 export const addEpisodesBatch = (text: string, separator = '---') =>
   request<Episode[]>('/api/episodes/batch', { method: 'POST', body: { text, separator } })
+
+/**
+ * Re-read a finished chapter and rewrite its summary.
+ *
+ * This is a model call, so it is slow and it costs something — worth it after
+ * editing prose by hand, because the summary is what the next episode is told
+ * about this one.
+ */
+export const summarizeEpisode = (episodeNumber: number) =>
+  request<Episode>(`/api/episodes/${episodeNumber}/summarize`, { method: 'POST' })
 
 // ==========================================================================
 // Generation

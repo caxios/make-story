@@ -37,6 +37,39 @@ CHARACTER_MEMORIES = 5
 WRITER_MEMORIES = 4
 # Trailing prose handed to the Writer for voice continuity.
 STYLE_SAMPLE_WORDS = 500
+# The tail of an episode's prose, kept as its closing situation. Long enough to
+# carry where everyone stands and what the last beat was; short enough that the
+# next Director reads it rather than skimming it.
+CLOSING_PASSAGE_CHARS = 700
+# How many episodes back the Director sees in full, in order.
+ARC_EPISODES = 3
+
+
+def _closing_passage(episode: Episode) -> str:
+    """The last stretch of an episode's prose — where it left everyone standing.
+
+    Built by taking whole paragraphs from the end until the budget is spent, so
+    the passage always opens on a paragraph rather than halfway through a
+    sentence. A single paragraph longer than the budget is truncated, because
+    some of it beats none of it.
+    """
+    text = (episode.final_text or "").strip()
+    if not text:
+        return ""
+
+    paragraphs = [p for p in text.split("\n\n") if p.strip()]
+    kept: list[str] = []
+    budget = CLOSING_PASSAGE_CHARS
+    for paragraph in reversed(paragraphs):
+        if kept and len(paragraph) > budget:
+            break
+        kept.insert(0, paragraph)
+        budget -= len(paragraph) + 2
+        if budget <= 0:
+            break
+
+    passage = "\n\n".join(kept).strip()
+    return passage[-CLOSING_PASSAGE_CHARS:].strip()
 
 
 class MemoryManager:
@@ -100,6 +133,7 @@ class MemoryManager:
             world_lore_updates=memory.world_lore_updates,
             opened_threads=opened,
             resolved_threads=resolved,
+            closing=_closing_passage(episode),
         )
 
         self.vector_store.add_episode_summary(
@@ -239,14 +273,47 @@ class MemoryManager:
     # CONTEXT PACKETS (§4.5)
     # ======================================================================
 
+    def build_continuity_brief(self) -> str:
+        """Tier 1: exactly where the previous episode left off.
+
+        The summary of an episode says what happened; this is the prose itself,
+        so the Director can open on the same room, the same mood and the same
+        unfinished sentence rather than restarting the story.
+        """
+        closing = self.structured_store.get_episode_closing()
+        if closing is None:
+            return ""
+        number, passage = closing
+        return (
+            f"Episode {number} ended here — this is its final passage, verbatim:\n\n"
+            f"{passage}\n\n"
+            "Scene 1 of this episode must follow on from that moment: the same "
+            "place or a clearly motivated move from it, the same emotional "
+            "temperature, and the immediate consequence of whatever just happened."
+        )
+
     def build_director_context(
         self, characters: Mapping[str, CharacterProfile], episode: Episode | None = None
     ) -> str:
-        """What the Director needs: the story so far, open threads, who stands where."""
+        """What the Director needs, in three tiers.
+
+        The tiers are ordered by how binding they are, and labelled so the model
+        can tell the difference: what it must pick up from, what it should stay
+        consistent with, and what it may draw on.
+        """
         if self.is_empty():
             return NOTHING_YET
 
-        sections = [f"## Story So Far\n{self.get_recent_context()}"]
+        sections = []
+
+        brief = self.build_continuity_brief()
+        if brief:
+            sections.append("## Tier 1 — Where The Last Episode Left Off (pick up from here)\n" + brief)
+
+        sections.append(
+            f"## Tier 2 — The Story So Far (stay consistent with this)\n"
+            f"{self.get_recent_context(ARC_EPISODES)}"
+        )
 
         active = self.get_active_plot_threads()
         sections.append(
@@ -269,15 +336,47 @@ class MemoryManager:
             sections.append(f"## Character Relationships (current state)\n{graph}")
 
         if episode is not None:
-            relevant = self.get_relevant_memories(
-                episode.author_storyline, top_k=DIRECTOR_MEMORIES
-            )
+            relevant = self.recall_for_episode(episode, characters)
             if relevant:
                 sections.append(
-                    "## Past Events This Episode Touches\n" + context.format_bullets(relevant)
+                    "## Tier 3 — Past Events This Episode Touches (draw on these)\n"
+                    + context.format_bullets(relevant)
                 )
 
         return "\n\n".join(sections)
+
+    def recall_for_episode(
+        self,
+        episode: Episode,
+        characters: Mapping[str, CharacterProfile] | None = None,
+        top_k: int = DIRECTOR_MEMORIES,
+    ) -> list[str]:
+        """Tier 3: semantic recall, asked several ways rather than once.
+
+        One query against the author's outline finds what the outline already
+        says. The episode also needs what it does *not* say — what these
+        characters have been through, and what the open threads were about — so
+        each is asked separately and the results are merged nearest-first.
+        """
+        queries = [episode.author_storyline]
+        if characters:
+            # Names, not ids: the stored documents are prose about people.
+            queries.append(" ".join(c.name for c in characters.values()))
+        queries.extend(thread.description for thread in self.get_active_plot_threads()[:3])
+
+        best: dict[str, tuple[float, Memory]] = {}
+        for query in queries:
+            if not query or not query.strip():
+                continue
+            for found in self.vector_store.search(query, top_k=top_k):
+                # A memory that several queries reach is kept at its best score,
+                # which is what floats it above one that only matched narrowly.
+                distance = found.distance if found.distance is not None else float("inf")
+                if found.id not in best or distance < best[found.id][0]:
+                    best[found.id] = (distance, found)
+
+        ordered = sorted(best.values(), key=lambda item: item[0])
+        return [memory.render() for _, memory in ordered[:top_k]]
 
     def build_character_context(
         self, character: CharacterProfile, scene: Scene, characters: Mapping[str, CharacterProfile]
@@ -407,7 +506,17 @@ class MemoryManager:
         return context.format_bullets(lines) if lines else ""
 
     def _previous_prose_sample(self, previous_episode: int | None) -> str:
-        """The tail of an earlier episode's prose, for the Writer to match."""
+        """The tail of an earlier episode's prose, for the Writer to match.
+
+        The recorded closing passage is real prose; the stored summary is not,
+        and handing the Writer a summary to "match the voice of" teaches it to
+        write summaries. So the summary is only a fallback for episodes recorded
+        before closings were kept.
+        """
+        closing = self.structured_store.get_episode_closing(previous_episode)
+        if closing is not None:
+            return closing[1]
+
         summaries = self.structured_store.get_story().episode_summaries
         if previous_episode is None:
             previous_episode = max(summaries, default=None)

@@ -60,7 +60,7 @@ to port 8000.
 
 | | |
 |---|---|
-| **Director** | Breaks your outline into 3–5 scenes, inventing the connective tissue between your beats |
+| **Director** | Breaks your outline into 3–4 scenes, keeping every beat you wrote and inventing the connective tissue between them |
 | **Character agents** | One shared model, a different prompt per character: their traits, voice, goals, secrets, and what *they* personally remember |
 | **Lore Checker** | Validates every scene against your world's rules and the characters' own definitions; re-runs the offending turns with a correction injected |
 | **Writer** | Turns the interaction log into prose, in your perspective, density, pacing and language |
@@ -112,7 +112,7 @@ Generation reports real progress, driven by the pipeline itself:
 ## Command line
 
 ```bash
-pytest                                        # 361 tests, no API key and no network
+pytest                                        # 383 tests, no API key and no network (enforced, not assumed)
 python -m storyweaver.smoke_test              # is the model binding working?
 python -m storyweaver.demo_scene --two        # one scene, printed
 python -m storyweaver.demo_episode --memory   # one episode, with continuity
@@ -199,7 +199,9 @@ pytest                     # the whole suite
 pytest -q --ignore=tests/test_ui_pages.py   # faster, skips the Streamlit renders
 ```
 
-The suite never touches the network. Agents take an optional `llm=` and
-`tests/conftest.py` supplies a `FakeLLM` that records prompts and returns
-scripted structured output; ChromaDB runs against a per-test directory with a
+The suite never touches the network, and that is enforced rather than assumed:
+an autouse fixture in `tests/conftest.py` makes `llm.build_model` raise, so a
+test that forgets its stub fails instead of quietly spending your quota. Agents
+take an optional `llm=` and `conftest.py` supplies a `FakeLLM` that records
+prompts and returns scripted structured output; ChromaDB runs against a per-test directory with a
 deterministic embedder; Streamlit pages are executed by `AppTest`.

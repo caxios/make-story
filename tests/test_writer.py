@@ -52,7 +52,7 @@ def test_prompt_reflects_the_writing_style(
     assert "harry-potter" in prompt
     assert "Rich and textured" in prompt      # lush density, spelled out
     assert "65%" in prompt                    # dialogue ratio as a percentage
-    assert "900 words" in prompt
+    assert "800–1,000 words" in prompt   # a band, in the unit English is measured in
     assert "Diana Wynne Jones" in prompt
     assert "in en." in prompt                 # output language
 
@@ -64,7 +64,10 @@ def test_default_style_is_korean_third_person_limited(
 
     assert "third-person limited" in prompt
     assert "in ko." in prompt
-    assert "1500 words" in prompt
+    # Korean is counted in characters, not words: a model told "1,400 words"
+    # of Korean reads that as 어절 and overshoots three- to four-fold.
+    assert "1,250–1,550 characters" in prompt
+    assert "공백 포함" in prompt
 
 
 def test_pov_defaults_to_the_scene_opener_when_unset(
