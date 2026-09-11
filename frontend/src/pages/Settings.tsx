@@ -31,28 +31,28 @@ import type {
 } from '@/types/storyweaver'
 
 const PERSPECTIVES: { value: Perspective; label: string }[] = [
-  { value: 'third_person_limited', label: 'Third person limited — inside one head' },
-  { value: 'third_person_omniscient', label: 'Third person omniscient — free to move' },
-  { value: 'first_person', label: 'First person — they narrate themselves' },
+  { value: 'third_person_limited', label: '3인칭 주인공 시점 (Third person limited) — 특정 인물의 내면 중심' },
+  { value: 'third_person_omniscient', label: '3인칭 전지적 작가 시점 (Third person omniscient) — 자유로운 시점 이동' },
+  { value: 'first_person', label: '1인칭 주인공 시점 (First person) — 주인공 독백 및 직접 서술' },
 ]
 
 const TENSES: { value: Tense; label: string }[] = [
-  { value: 'past', label: 'Past — the standard for narrative fiction' },
-  { value: 'present', label: 'Present — immediate and close' },
+  { value: 'past', label: '과거형 (Past) — 일반적인 서사 소설의 표준' },
+  { value: 'present', label: '현재형 (Present) — 긴박감과 몰입감 강조' },
 ]
 
 const DENSITIES: { value: ProseDensity; label: string }[] = [
-  { value: 'sparse', label: 'Sparse — short sentences, whitespace between beats' },
-  { value: 'moderate', label: 'Moderate — description where it earns its place' },
-  { value: 'lush', label: 'Lush — layered imagery, longer rhythms' },
+  { value: 'sparse', label: '간결함 (Sparse) — 짧은 문장과 여백, 빠른 템포' },
+  { value: 'moderate', label: '보통 (Moderate) — 상황에 맞는 균형 잡힌 묘사' },
+  { value: 'lush', label: '풍부함 (Lush) — 다채로운 감각적 묘사와 장문' },
 ]
 
 export function Settings() {
   return (
     <>
       <PageHeader
-        title="Settings"
-        description="How the prose is written, and what writing it has cost."
+        title="설정"
+        description="문체 스타일 및 분량 제어, 모델 API 및 누적 사용량/비용을 확인합니다."
       />
       <div className="space-y-5">
         <StylePanel />
@@ -95,9 +95,9 @@ function StylePanel() {
     try {
       await api.saveStyle(draft)
       await refresh()
-      success('Writing style saved')
+      success('문체 설정이 저장되었습니다')
     } catch (cause) {
-      fromError(cause, 'Could not save the style.')
+      fromError(cause, '문체 설정을 저장하지 못했습니다.')
     } finally {
       setSaving(false)
     }
@@ -113,11 +113,11 @@ function StylePanel() {
 
   return (
     <Panel
-      title="Writing style"
-      description="Set once for the whole story. Every one of these goes into the Writer's prompt."
+      title="문체 및 서술 스타일"
+      description="작품 전체에 걸쳐 적용됩니다. 작가 AI 프롬프트에 직접 반영됩니다."
       actions={
         <>
-          {dirty && <Badge tone="warn">Unsaved</Badge>}
+          {dirty && <Badge tone="warn">저장되지 않음</Badge>}
           <Button
             variant="primary"
             icon={Save}
@@ -125,7 +125,7 @@ function StylePanel() {
             loading={saving}
             disabled={!dirty}
           >
-            Save style
+            문체 저장
           </Button>
         </>
       }
@@ -133,52 +133,52 @@ function StylePanel() {
       <div className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <SelectField
-            label="Narrative perspective"
+            label="서술 시점"
             value={draft.perspective}
             onChange={(event) => patch({ perspective: event.target.value as Perspective })}
             options={PERSPECTIVES}
           />
           <SelectField
-            label="Tense"
+            label="문장 시제"
             value={draft.tense}
             onChange={(event) => patch({ tense: event.target.value as Tense })}
             options={TENSES}
           />
           <SelectField
-            label="Point-of-view character"
+            label="시점 인물 (POV)"
             value={draft.pov_character_id ?? ''}
             onChange={(event) => patch({ pov_character_id: event.target.value || null })}
             options={[
-              { value: '', label: '— whoever opens the scene —' },
+              { value: '', label: '— 장면을 여는 인물 기준 —' },
               ...project.characters.map((character) => ({
                 value: character.id,
                 label: character.name,
               })),
             ]}
-            hint="Ignored for omniscient. If they are not in a scene, the Writer falls back to whoever opens it."
+            hint="전지적 작가 시점에서는 무시됩니다. 해당 인물이 장면에 등장하지 않으면 장면을 여는 인물의 시점으로 대체됩니다."
           />
           <SelectField
-            label="Prose density"
+            label="문장 밀도"
             value={draft.prose_density}
             onChange={(event) => patch({ prose_density: event.target.value as ProseDensity })}
             options={DENSITIES}
-            hint="Pacing is set per episode, in the queue — this is the story-wide texture."
+            hint="전개 속도(호흡)는 에피소드 큐에서 회차별로 지정할 수 있으며, 이것은 작품 전체의 문체 질감입니다."
           />
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2">
           <Slider
-            label="Dialogue vs. narration"
+            label="대화 vs. 서술 비율"
             min={0.2}
             max={0.8}
             step={0.05}
             value={draft.dialogue_ratio}
             onChange={(dialogue_ratio) => patch({ dialogue_ratio })}
-            format={(value) => `${Math.round(value * 100)}% dialogue`}
+            format={(value) => `${Math.round(value * 100)}% 대화`}
           />
           <div className="space-y-1.5">
             <TextField
-              label={korean ? 'Target characters per scene (공백 포함)' : 'Target words per scene'}
+              label={korean ? '장면당 목표 글자 수 (공백 포함)' : '장면당 목표 단어 수'}
               type="number"
               min={100}
               max={6000}
@@ -198,18 +198,17 @@ function StylePanel() {
           <Gauge className="mt-0.5 size-4 shrink-0 text-ink-muted" aria-hidden />
           <div className="text-xs leading-relaxed text-ink-dim">
             <p>
-              The Director plans 3–4 scenes, so one episode lands around{' '}
+              디렉터 AI는 1화당 3~4개의 장면을 기획하므로, 1화 전체 분량은 약{' '}
               <span className="font-medium text-ink">
                 {formatCount(episodeLow)}–{formatCount(episodeHigh)}
               </span>{' '}
-              {korean ? '자, 공백 포함' : 'words'}.
+              {korean ? '자 (공백 포함)' : '단어'} 내외가 됩니다.
             </p>
             {korean && (
               <p className="mt-1.5 text-ink-muted">
-                A Korean web-novel 회차 is 4,500–5,500자, which is what the default 1,400자
-                per scene is set to hit. The Writer is instructed in characters rather than
-                words, because a model told &ldquo;1,400 words&rdquo; of Korean reads that as
-                어절 and overshoots three- to four-fold.
+                한국 웹소설 1화 표준 규격은 4,500~5,500자이며, 기본값인 장면당 1,400자는 이를 정확히
+                맞추기 위해 설정되었습니다. AI는 단어가 아닌 글자 수(Characters) 단위로 지시를 받아
+                분량을 정밀하게 조절합니다.
               </p>
             )}
           </div>
@@ -217,20 +216,20 @@ function StylePanel() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <TextField
-            label="Output language"
+            label="출력 언어"
             value={draft.language}
             onChange={(event) => patch({ language: event.target.value })}
-            hint="Written into the prompt verbatim: “ko”, “Korean” and “English” all work."
+            hint="프롬프트에 직접 전달됩니다: “ko”, “Korean”, “한국어”, “English” 등을 입력할 수 있습니다."
           />
         </div>
 
         <TextArea
-          label="Author style notes"
+          label="작가 스타일 특이사항 (지침)"
           rows={4}
           value={draft.author_style_notes}
           onChange={(event) => patch({ author_style_notes: event.target.value })}
-          placeholder="Short paragraphs. No adverbs in dialogue tags. Write like…"
-          hint="Free text, appended to the Writer's guidelines."
+          placeholder="간결한 단문 위주. 대화 지문에서 과도한 부사 생략. 웹소설 특유의 빠른 템포와 사이다 전개…"
+          hint="자유 형식 텍스트로, 작가 AI의 작성 가이드라인 끝에 직접 추가됩니다."
         />
       </div>
     </Panel>
@@ -249,7 +248,7 @@ function TelemetryPanel() {
     void api
       .getTelemetry()
       .then(setTelemetry)
-      .catch((cause) => fromError(cause, 'Could not read the usage log.'))
+      .catch((cause) => fromError(cause, '사용량 로그를 불러오지 못했습니다.'))
   }, [fromError])
 
   if (!telemetry) return <div className="sw-panel h-56 animate-pulse-soft" />
@@ -259,45 +258,44 @@ function TelemetryPanel() {
 
   return (
     <Panel
-      title="Model and cost"
-      description="Every model call is metered. These totals are cumulative across every generation this project has run."
+      title="모델 및 사용 비용"
+      description="모든 LLM 호출이 측정됩니다. 이 프로젝트에서 생성된 모든 회차의 누적 사용량입니다."
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-xl border border-line bg-surface px-4 py-3">
-          <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">Model</p>
+          <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">모델</p>
           <p className="mt-1.5 font-mono text-sm text-ink">{telemetry.model}</p>
           <p className="mt-2 text-xs text-ink-muted">
-            temperature {telemetry.temperature} · max{' '}
-            {formatCount(telemetry.max_output_tokens)} output tokens per call
+            온도(temperature) {telemetry.temperature} · 1회 호출당 최대{' '}
+            {formatCount(telemetry.max_output_tokens)} 출력 토큰
           </p>
           {!telemetry.api_key_configured && (
             <p className="mt-2.5 flex items-start gap-1.5 text-xs leading-relaxed text-warn-bright">
               <KeyRound className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-              GOOGLE_API_KEY is unset. Set it in <code>.env</code> and restart the backend, or
-              generation will fail.
+              GOOGLE_API_KEY가 설정되지 않았습니다. .env 파일에 입력 후 백엔드를 재시작해야
+              집필 생성이 정상 동작합니다.
             </p>
           )}
         </div>
 
         <div className="rounded-xl border border-line bg-surface px-4 py-3">
-          <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">Spent</p>
+          <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">누적 비용</p>
           <p className="mt-1.5 flex items-baseline gap-2">
             <span className="text-2xl font-semibold tracking-tight text-ink tabular-nums">
               ${telemetry.cost.toFixed(2)}
             </span>
             <span className="text-xs text-ink-muted">
-              {formatCount(telemetry.total_tokens)} tokens
+              {formatCount(telemetry.total_tokens)} 토큰
             </span>
           </p>
           <p className="mt-1 text-xs text-ink-muted">
-            {telemetry.runs} run{telemetry.runs === 1 ? '' : 's'} · {telemetry.calls} call
-            {telemetry.calls === 1 ? '' : 's'} · {formatCount(telemetry.input_tokens)} in /{' '}
-            {formatCount(telemetry.output_tokens)} out
+            {telemetry.runs}회 집필 · {telemetry.calls}회 호출 · 입력{' '}
+            {formatCount(telemetry.input_tokens)} / 출력 {formatCount(telemetry.output_tokens)}
           </p>
           <p className="mt-2 flex items-start gap-1.5 text-[0.68rem] leading-relaxed text-ink-muted">
-            <Coins className="mt-0.5 size-3 shrink-0" aria-hidden />${
+            <Coins className="mt-0.5 size-3 shrink-0" aria-hidden />백만 토큰당 입력 ${
               telemetry.input_cost_per_mtok
-            }/M in, ${telemetry.output_cost_per_mtok}/M out — the configured rates, not a bill.
+            }, 출력 ${telemetry.output_cost_per_mtok} — 실제 청구액이 아닌 모델 단가 기준 추정치입니다.
           </p>
         </div>
       </div>
@@ -305,8 +303,7 @@ function TelemetryPanel() {
       {telemetry.estimated && (
         <p className="mt-4 flex items-start gap-2 rounded-lg border border-warn/25 bg-warn/8 px-3 py-2 text-xs leading-relaxed text-warn-bright">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          Some calls returned no usage metadata, so their tokens were estimated from length.
-          Treat these totals as a floor.
+          일부 호출에서 사용량 메타데이터가 누락되어 텍스트 길이로부터 토큰 수를 추정했습니다.
         </p>
       )}
 
@@ -314,7 +311,7 @@ function TelemetryPanel() {
         <div className="mt-5">
           <p className="mb-2.5 flex items-center gap-2 text-xs font-medium tracking-wide text-ink-muted uppercase">
             <Type className="size-3.5" aria-hidden />
-            Where it went
+            단계별 토큰 사용량
           </p>
           <div className="space-y-2">
             {stages.map(([stage, tokens]) => (
@@ -333,23 +330,22 @@ function TelemetryPanel() {
             ))}
           </div>
           <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-            The character agent is usually the overwhelming majority of the spend — one call per
-            turn, per scene.
+            등장인물 간 대화 시뮬레이션 에이전트 호출이 통상 토큰 사용량의 대부분을 차지합니다.
           </p>
         </div>
       )}
 
       {telemetry.runs === 0 && (
         <p className="mt-4 text-xs leading-relaxed text-ink-muted">
-          Nothing has been generated yet, so there is nothing to account for. A four-scene
-          episode with three characters runs roughly 150k–250k tokens.
+          아직 생성된 회차가 없어 누적 사용량이 없습니다. 등장인물 3명이 나오는 4장면 1회차 집필 시
+          통상 약 15만~25만 토큰이 소모됩니다.
         </p>
       )}
 
       {telemetry.recent.length > 0 && (
         <div className="mt-5">
           <p className="mb-2 text-xs font-medium tracking-wide text-ink-muted uppercase">
-            Recent runs
+            최근 집필 내역
           </p>
           <div className="space-y-1">
             {telemetry.recent.map((run, index) => (
@@ -357,11 +353,11 @@ function TelemetryPanel() {
                 key={`${run.at}-${index}`}
                 className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-3 py-2 text-xs"
               >
-                <span className="text-ink-dim">Episode {run.episode_number}</span>
+                <span className="text-ink-dim">제{run.episode_number}화</span>
                 <span className="flex items-center gap-3 font-mono text-ink-muted tabular-nums">
-                  <span>{formatCount(run.input_tokens + run.output_tokens)} tok</span>
+                  <span>{formatCount(run.input_tokens + run.output_tokens)} 토큰</span>
                   <span>${run.cost.toFixed(3)}</span>
-                  <span>{Math.round(run.seconds)}s</span>
+                  <span>{Math.round(run.seconds)}초</span>
                 </span>
               </div>
             ))}

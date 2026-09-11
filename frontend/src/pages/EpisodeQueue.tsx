@@ -45,9 +45,9 @@ import { useProject } from '@/state/ProjectContext'
 import type { Episode, Pacing, PendingGeneration } from '@/types/storyweaver'
 
 const PACING_OPTIONS: { value: Pacing; label: string }[] = [
-  { value: 'slow', label: 'slow — introspective, let it breathe' },
-  { value: 'normal', label: 'normal — move when the scene moves' },
-  { value: 'fast', label: 'fast — short sentences, hard cuts' },
+  { value: 'slow', label: '느림 (slow) — 심리 묘사 및 차분한 호흡' },
+  { value: 'normal', label: '보통 (normal) — 균형 잡힌 장면 전개' },
+  { value: 'fast', label: '빠름 (fast) — 빠른 템포와 긴박한 컷 전환' },
 ]
 
 const words = (text: string) => text.split(/\s+/).filter(Boolean).length
@@ -102,7 +102,7 @@ export function EpisodeQueue() {
       await api.moveEpisode(episode.episode_number, offset)
       await refresh()
     } catch (cause) {
-      fromError(cause, 'Could not reorder the queue.')
+      fromError(cause, '큐 순서를 변경하지 못했습니다.')
     } finally {
       setBusy(false)
     }
@@ -125,7 +125,7 @@ export function EpisodeQueue() {
       }
       await refresh()
     } catch (cause) {
-      fromError(cause, 'Could not reorder the queue.')
+      fromError(cause, '큐 순서를 변경하지 못했습니다.')
     } finally {
       setBusy(false)
     }
@@ -135,9 +135,9 @@ export function EpisodeQueue() {
     try {
       await api.deleteEpisode(episode.episode_number)
       await refresh()
-      success(`Episode ${episode.episode_number} deleted, and the queue renumbered`)
+      success(`제${episode.episode_number}화가 삭제되고 큐가 재정렬되었습니다`)
     } catch (cause) {
-      fromError(cause, 'Could not delete the episode.')
+      fromError(cause, '회차를 삭제하지 못했습니다.')
     }
   }
 
@@ -145,9 +145,9 @@ export function EpisodeQueue() {
     try {
       await api.updateEpisode(episode.episode_number, { status: 'queued' })
       await refresh()
-      success(`Episode ${episode.episode_number} is back in the queue`)
+      success(`제${episode.episode_number}화가 다시 큐에 등록되었습니다`)
     } catch (cause) {
-      fromError(cause, 'Could not re-queue the episode.')
+      fromError(cause, '회차를 다시 큐에 넣지 못했습니다.')
     }
   }
 
@@ -166,15 +166,15 @@ export function EpisodeQueue() {
   return (
     <>
       <PageHeader
-        title="Episode Queue"
-        description="A rough outline per chapter. The Director fills in the connective tissue."
+        title="에피소드 큐"
+        description="각 회차별 개요를 관리합니다. 디렉터 AI가 개요 사이의 사건과 대사를 유기적으로 채워 넣습니다."
         actions={
           <>
             <Button icon={FileStack} onClick={() => setBatching(true)}>
-              Batch add
+              일괄 등록
             </Button>
             <Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>
-              Add episode
+              회차 추가
             </Button>
           </>
         }
@@ -184,14 +184,9 @@ export function EpisodeQueue() {
         <div className="mb-5 flex items-start gap-3 rounded-xl border border-accent/25 bg-accent/8 px-4 py-3">
           <RotateCcw className="mt-0.5 size-4 shrink-0 text-accent-bright" aria-hidden />
           <p className="text-xs leading-relaxed text-ink-dim">
-            {pending.map((item) => `Episode ${item.episode_number}`).join(', ')} stopped partway
-            through. The{' '}
-            {pending.reduce((total, item) => total + item.scenes_completed, 0)} scene
-            {pending.reduce((total, item) => total + item.scenes_completed, 0) === 1
-              ? ''
-              : 's'}{' '}
-            already written are saved — generating again picks up from where it left off rather
-            than starting over.
+            {pending.map((item) => `제${item.episode_number}화`).join(', ')} 생성이 중간에 중단되었습니다.{' '}
+            작성 완료된 {pending.reduce((total, item) => total + item.scenes_completed, 0)}개 장면이
+            보존되어 있습니다. 다시 생성하면 처음부터 시작하지 않고 중단된 지점부터 이어서 집필합니다.
           </p>
         </div>
       )}
@@ -200,11 +195,11 @@ export function EpisodeQueue() {
         <Panel>
           <EmptyState
             icon={ListOrdered}
-            title="Nothing queued"
-            description="An outline can be a single rough paragraph. Everything between your beats is the Director's job."
+            title="대기 중인 회차가 없습니다"
+            description="개요는 한두 문장의 거친 메모여도 충분합니다. 사건 사이의 구체적인 장면 구성은 디렉터 AI가 담당합니다."
             action={
               <Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>
-                Add the first outline
+                첫 번째 회차 추가
               </Button>
             }
           />
@@ -254,12 +249,12 @@ export function EpisodeQueue() {
       )}
 
       <Panel
-        title="Generation settings"
-        description="Applies to the next run. A scene usually ends earlier, when its objective is met."
+        title="생성 설정"
+        description="다음 생성 시 적용됩니다. 각 장면은 목표가 달성되면 지정된 턴 수보다 일찍 끝날 수 있습니다."
         className="mt-5"
       >
         <TextField
-          label="Turns per scene (cap)"
+          label="장면당 최대 턴 수 (상한)"
           type="number"
           min={2}
           max={40}
@@ -303,18 +298,18 @@ export function EpisodeQueue() {
         open={deleting !== null}
         onClose={() => setDeleting(null)}
         onConfirm={() => deleting && void remove(deleting)}
-        title={`Delete episode ${deleting?.episode_number}?`}
+        title={`제${deleting?.episode_number}화를 삭제하시겠습니까?`}
         message={
           deleting?.status === 'completed' ? (
             <>
-              This chapter is written — {formatCount(words(deleting.final_text))} words. Deleting
-              it throws the prose away.
+              이 회차는 이미 작성 완료되었습니다 ({formatCount(words(deleting.final_text))} 단어).
+              삭제하면 작성된 본문이 영구 삭제됩니다.
               <p className="mt-2 text-ink-muted">
-                Every later episode moves up a number to close the gap.
+                삭제 시 이후 회차들의 번호가 하나씩 앞당겨져 자동으로 재정렬됩니다.
               </p>
             </>
           ) : (
-            'Every later episode moves up a number to close the gap.'
+            '삭제 시 이후 회차들의 번호가 하나씩 앞당겨져 자동으로 재정렬됩니다.'
           )
         }
       />
@@ -325,16 +320,15 @@ export function EpisodeQueue() {
         onConfirm={() => {
           if (regenerating) generate(regenerating)
         }}
-        title={`Regenerate episode ${regenerating?.episode_number}?`}
-        confirmLabel="Regenerate"
+        title={`제${regenerating?.episode_number}화를 다시 생성하시겠습니까?`}
+        confirmLabel="다시 생성"
         destructive={false}
         message={
           <>
-            The existing chapter — {formatCount(words(regenerating?.final_text ?? ''))} words —
-            is overwritten by whatever comes out this time.
+            기존에 작성된 본문({formatCount(words(regenerating?.final_text ?? ''))} 단어)은
+            새로 생성되는 본문으로 완전히 덮어씌워집니다.
             <p className="mt-2 text-ink-muted">
-              It starts from scratch rather than resuming, and any saved checkpoint for it is
-              cleared.
+              이어서 쓰지 않고 처음부터 새로 집필되며, 기존 진행 체크포인트는 초기화됩니다.
             </p>
           </>
         }
@@ -351,6 +345,12 @@ const STATUS_TONE = {
   queued: 'violet',
   in_progress: 'warn',
   completed: 'good',
+} as const
+
+const STATUS_LABELS = {
+  queued: '대기 중',
+  in_progress: '집필 중',
+  completed: '완료',
 } as const
 
 function EpisodeCard({
@@ -419,7 +419,7 @@ function EpisodeCard({
           draggable
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
-          title="Drag to reorder"
+          title="드래그하여 순서 변경"
           className="mt-0.5 cursor-grab text-ink-muted opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
         >
           <GripVertical className="size-4" />
@@ -432,19 +432,20 @@ function EpisodeCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate text-sm font-medium text-ink">
-              {episode.title || '(untitled)'}
+              {episode.title || '(제목 없음)'}
             </h3>
             <Badge tone={STATUS_TONE[episode.status]}>
               <span className={cn(episode.status === 'in_progress' && 'animate-pulse-soft')}>
-                {episode.status.replace('_', ' ')}
+                {STATUS_LABELS[episode.status]}
               </span>
             </Badge>
-            {completed && count > 0 && <Badge>{formatCount(count)} words</Badge>}
+            {completed && count > 0 && <Badge>{formatCount(count)} 단어</Badge>}
             {completed && episode.summary.trim() && (
-              <Badge tone="accent">summarized</Badge>
+              <Badge tone="accent">요약됨</Badge>
             )}
-            {episode.pacing !== 'normal' && <Badge tone="accent">{episode.pacing}</Badge>}
-            {resumable && <Badge tone="warn">resumable</Badge>}
+            {episode.pacing === 'slow' && <Badge tone="accent">느린 호흡</Badge>}
+            {episode.pacing === 'fast' && <Badge tone="accent">빠른 호흡</Badge>}
+            {resumable && <Badge tone="warn">이어쓰기 가능</Badge>}
           </div>
 
           <button
@@ -465,7 +466,7 @@ function EpisodeCard({
                 expanded ? 'whitespace-pre-wrap' : 'line-clamp-1',
               )}
             >
-              {episode.author_storyline || 'No outline written yet.'}
+              {episode.author_storyline || '아직 작성된 개요가 없습니다.'}
             </span>
           </button>
 
@@ -482,7 +483,7 @@ function EpisodeCard({
           {expanded && completed && episode.summary.trim() && (
             <div className="mt-3 rounded-lg border border-line bg-surface/60 px-3 py-2">
               <p className="mb-1 text-[0.65rem] font-medium tracking-wide text-ink-muted uppercase">
-                What the next episode is told
+                다음 회차에 전달되는 이전 줄거리 요약
               </p>
               <p className="line-clamp-4 text-xs leading-relaxed text-ink-muted">
                 {episode.summary}
@@ -494,22 +495,22 @@ function EpisodeCard({
         <div className="flex shrink-0 items-center gap-1">
           <IconButton
             icon={ArrowUp}
-            title="Move up"
+            title="위로 이동"
             disabled={first || busy}
             onClick={() => onMove(-1)}
           />
           <IconButton
             icon={ArrowDown}
-            title="Move down"
+            title="아래로 이동"
             disabled={last || busy}
             onClick={() => onMove(1)}
           />
           <span className="mx-1 h-5 w-px bg-line" aria-hidden />
-          <IconButton icon={Pencil} title="Edit the outline" onClick={onEdit} />
+          <IconButton icon={Pencil} title="개요 편집" onClick={onEdit} />
           {completed && (
-            <IconButton icon={RotateCcw} title="Put back in the queue" onClick={onRequeue} />
+            <IconButton icon={RotateCcw} title="대기열로 되돌리기" onClick={onRequeue} />
           )}
-          <IconButton icon={Trash2} title="Delete" onClick={onDelete} />
+          <IconButton icon={Trash2} title="삭제" onClick={onDelete} />
           <Button
             size="sm"
             variant={completed ? 'secondary' : 'primary'}
@@ -518,7 +519,7 @@ function EpisodeCard({
             loading={generating}
             onClick={onGenerate}
           >
-            {completed ? 'Regenerate' : 'Generate'}
+            {completed ? '다시 생성' : '집필 시작'}
           </Button>
         </div>
       </div>
@@ -558,11 +559,11 @@ function AddEpisodeModal({
     try {
       await api.addEpisode(storyline.trim(), title.trim(), pacing)
       await onAdded()
-      success(`Episode ${nextNumber} queued`)
+      success(`제${nextNumber}화가 큐에 등록되었습니다`)
       reset()
       onClose()
     } catch (cause) {
-      fromError(cause, 'Could not queue the episode.')
+      fromError(cause, '회차를 등록하지 못했습니다.')
     } finally {
       setSaving(false)
     }
@@ -573,38 +574,38 @@ function AddEpisodeModal({
       open={open}
       onClose={onClose}
       wide
-      title={`Add episode ${nextNumber}`}
-      description="Rough is fine. The Director invents what happens between your beats."
+      title={`제${nextNumber}화 추가`}
+      description="간단한 메모 수준의 개요도 괜찮습니다. AI가 사건 사이를 흥미진진하게 채워 넣습니다."
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>취소</Button>
           <Button
             variant="primary"
             onClick={() => void add()}
             loading={saving}
             disabled={!storyline.trim()}
           >
-            Add to queue
+            큐에 추가
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         <TextField
-          label="Title (optional)"
+          label="회차 제목 (선택사항)"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder="Left blank, the pipeline names it after writing it."
+          placeholder="비워두면 본문 작성 후 AI가 어울리는 제목을 자동으로 짓습니다."
         />
         <TextArea
-          label="Outline"
+          label="회차 개요"
           rows={9}
           value={storyline}
           onChange={(event) => setStoryline(event.target.value)}
-          placeholder="이번 회차에서 일어날 이야기를 대략적으로 적어주세요…"
+          placeholder="이번 회차에서 일어날 주요 사건과 전개를 대략적으로 적어주세요…"
         />
         <SelectField
-          label="Pacing"
+          label="전개 속도 (Pacing)"
           value={pacing}
           onChange={(event) => setPacing(event.target.value as Pacing)}
           options={PACING_OPTIONS}
@@ -650,10 +651,10 @@ function EditEpisodeModal({
         pacing: draft.pacing,
       })
       await onSaved()
-      success('Outline saved')
+      success('개요가 저장되었습니다')
       onClose()
     } catch (cause) {
-      fromError(cause, 'Could not save the episode.')
+      fromError(cause, '회차를 저장하지 못했습니다.')
     } finally {
       setSaving(false)
     }
@@ -664,30 +665,30 @@ function EditEpisodeModal({
       open={episode !== null}
       onClose={onClose}
       wide
-      title={`Edit episode ${episode?.episode_number}`}
+      title={`제${episode?.episode_number}화 개요 편집`}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>취소</Button>
           <Button variant="primary" onClick={() => void save()} loading={saving}>
-            Save
+            저장
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         <TextField
-          label="Title"
+          label="회차 제목"
           value={draft.title}
           onChange={(event) => setDraft({ ...draft, title: event.target.value })}
         />
         <TextArea
-          label="Outline"
+          label="회차 개요"
           rows={9}
           value={draft.storyline}
           onChange={(event) => setDraft({ ...draft, storyline: event.target.value })}
         />
         <SelectField
-          label="Pacing"
+          label="전개 속도 (Pacing)"
           value={draft.pacing}
           onChange={(event) => setDraft({ ...draft, pacing: event.target.value as Pacing })}
           options={PACING_OPTIONS}
@@ -696,8 +697,7 @@ function EditEpisodeModal({
         {storylineChanged && (
           <p className="flex items-start gap-2 rounded-lg border border-warn/25 bg-warn/8 px-3 py-2 text-xs leading-relaxed text-warn-bright">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-            Changing the outline discards any saved checkpoint for this episode — the scenes it
-            holds belong to the old outline.
+            개요를 변경하면 이 회차의 기존 진행 체크포인트가 초기화됩니다 — 이전 개요를 기반으로 작성된 장면들과 충돌을 방지하기 위함입니다.
           </p>
         )}
       </div>
@@ -729,11 +729,11 @@ function BatchAddModal({
     try {
       const added = await api.addEpisodesBatch(text, separator)
       await onAdded()
-      success(`${added.length} episode${added.length === 1 ? '' : 's'} queued`)
+      success(`${added.length}개 회차가 큐에 등록되었습니다`)
       setText('')
       onClose()
     } catch (cause) {
-      fromError(cause, 'Could not import the outlines.')
+      fromError(cause, '개요 목록을 가져오지 못했습니다.')
     } finally {
       setSaving(false)
     }
@@ -746,40 +746,40 @@ function BatchAddModal({
       open={open}
       onClose={onClose}
       wide
-      title="Batch add"
-      description="Paste or upload several outlines at once, one per section."
+      title="일괄 등록 (Batch Add)"
+      description="여러 회차의 개요를 구분자로 나누어 한 번에 등록하거나 텍스트 파일을 불러옵니다."
       footer={
         <>
           <span className="mr-auto text-xs text-ink-muted">
-            {count === 0 ? 'Nothing to add yet' : `${count} outline${count === 1 ? '' : 's'}`}
+            {count === 0 ? '등록할 개요가 없습니다' : `${count}개 회차 준비됨`}
           </span>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>취소</Button>
           <Button
             variant="primary"
             onClick={() => void add()}
             loading={saving}
             disabled={count === 0}
           >
-            Queue {count > 0 ? count : ''}
+            {count > 0 ? `${count}개 ` : ''}등록하기
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         <TextField
-          label="Separator"
+          label="회차 구분자"
           value={separator}
           onChange={(event) => setSeparator(event.target.value || '---')}
-          hint="The line that divides one outline from the next."
+          hint="회차와 회차 사이를 나누는 기준 문자열입니다."
           className="max-w-40"
         />
 
         <TextArea
-          label="Outlines"
+          label="개요 목록"
           rows={12}
           value={text}
           onChange={(event) => setText(event.target.value)}
-          placeholder={`Chapter one happens.\n${separator}\nChapter two happens.\n${separator}\nChapter three happens.`}
+          placeholder={`1화에서 일어나는 사건.\n${separator}\n2화에서 일어나는 사건.\n${separator}\n3화에서 일어나는 사건.`}
         />
 
         <label className="flex cursor-pointer items-center gap-2 text-xs text-ink-muted transition-colors hover:text-ink-dim">
@@ -793,7 +793,7 @@ function BatchAddModal({
             }}
           />
           <FileStack className="size-3.5" />
-          …or load a .txt / .md file
+          …또는 .txt / .md 파일 불러오기
         </label>
       </div>
     </Modal>

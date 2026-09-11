@@ -40,10 +40,10 @@ export function EpisodeSummary({
     try {
       await api.updateEpisode(episode.episode_number, { summary: draft })
       await onChanged()
-      success('Summary saved — later episodes will be told this')
+      success('요약이 저장되었습니다 — 이후 회차 생성 시 반영됩니다')
       setEditing(false)
     } catch (cause) {
-      fromError(cause, 'Could not save the summary.')
+      fromError(cause, '요약을 저장하지 못했습니다.')
     } finally {
       setSaving(false)
     }
@@ -55,9 +55,9 @@ export function EpisodeSummary({
       const updated = await api.summarizeEpisode(episode.episode_number)
       setDraft(updated.summary)
       await onChanged()
-      success('Summary rewritten from the chapter')
+      success('본문 내용을 바탕으로 요약을 다시 작성했습니다')
     } catch (cause) {
-      fromError(cause, 'Could not re-summarize the chapter.')
+      fromError(cause, '회차 요약을 다시 생성하지 못했습니다.')
     } finally {
       setRegenerating(false)
     }
@@ -76,11 +76,11 @@ export function EpisodeSummary({
         >
           <Brain className="size-4 shrink-0 text-ink-muted" aria-hidden />
           <span className="text-xs font-medium tracking-wide text-ink-dim uppercase">
-            Episode memory
+            회차 기억 (요약)
           </span>
           {!open && (
             <span className="min-w-0 flex-1 truncate text-xs text-ink-muted">
-              {empty ? 'Not summarized yet' : episode.summary}
+              {empty ? '아직 요약되지 않음' : episode.summary}
             </span>
           )}
         </button>
@@ -90,14 +90,14 @@ export function EpisodeSummary({
             <>
               <IconButton
                 icon={RefreshCw}
-                title="Rewrite the summary from the chapter"
+                title="본문 내용을 바탕으로 요약 다시 작성"
                 onClick={() => void regenerate()}
                 disabled={regenerating}
                 className={cn(regenerating && 'animate-pulse-soft')}
               />
               <IconButton
                 icon={Pencil}
-                title="Edit the summary"
+                title="요약 직접 편집"
                 onClick={() => setEditing(true)}
               />
             </>
@@ -107,7 +107,7 @@ export function EpisodeSummary({
             onClick={() => setOpen((value) => !value)}
             className="rounded-md px-1.5 py-1 text-xs text-ink-muted transition-colors hover:text-ink"
           >
-            {open ? 'Hide' : 'Show'}
+            {open ? '접기' : '펼치기'}
           </button>
         </div>
       </div>
@@ -115,9 +115,9 @@ export function EpisodeSummary({
       {open && (
         <div className="border-t border-line px-4 py-3.5">
           <p className="mb-3 text-xs leading-relaxed text-ink-muted">
-            This is what the next episode is told about this one — alongside its closing
-            passage, which is taken from the prose automatically. Correct a nuance here and
-            every later chapter inherits the correction.
+            다음 회차를 집필할 때 AI가 참고하는 이전 줄거리 요약입니다. 본문 마지막 결말 문맥과 함께
+            디렉터 AI에게 전달됩니다. 여기서 세부 사항을 다듬으면 이후 생성되는 모든 회차에 수정된
+            연속성이 반영됩니다.
           </p>
 
           {editing ? (
@@ -136,7 +136,7 @@ export function EpisodeSummary({
                     setEditing(false)
                   }}
                 >
-                  Cancel
+                  취소
                 </Button>
                 <Button
                   variant="primary"
@@ -145,22 +145,21 @@ export function EpisodeSummary({
                   loading={saving}
                   disabled={draft === episode.summary}
                 >
-                  Save
+                  저장
                 </Button>
               </div>
             </div>
           ) : empty ? (
             <div className="flex flex-col items-start gap-2.5">
               <p className="text-sm text-ink-dim">
-                No summary yet. Chapters written before summaries were recorded, or a run
-                whose summarizer failed, land here.
+                아직 저장된 요약이 없습니다. 이전 버전에서 집필되었거나 요약 생성이 건너뛰어진 회차입니다.
               </p>
               <Button
                 icon={RefreshCw}
                 onClick={() => void regenerate()}
                 loading={regenerating}
               >
-                Summarize it now
+                지금 본문 요약하기
               </Button>
             </div>
           ) : (

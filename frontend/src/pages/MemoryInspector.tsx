@@ -59,7 +59,7 @@ export function MemoryInspector() {
     void api
       .getMemoryStatus()
       .then(setStatus)
-      .catch((cause) => fromError(cause, 'Could not reach the memory layer.'))
+      .catch((cause) => fromError(cause, '메모리 계층에 접근하지 못했습니다.'))
   }, [fromError])
 
   useEffect(() => {
@@ -67,20 +67,20 @@ export function MemoryInspector() {
     void api
       .getPlotThreads(latestEpisode || undefined)
       .then(setThreads)
-      .catch((cause) => fromError(cause, 'Could not load the plot threads.'))
+      .catch((cause) => fromError(cause, '복선(떡밥) 목록을 불러오지 못했습니다.'))
   }, [status?.available, latestEpisode, fromError])
 
   if (status && !status.available) {
     return (
       <>
-        <PageHeader title="Memory Inspector" />
+        <PageHeader title="메모리 인스펙터" />
         <Panel>
           <EmptyState
             icon={Database}
-            title="The memory layer did not start"
+            title="메모리 계층이 시작되지 않았습니다"
             description={
               status.error ||
-              'ChromaDB is unavailable. Everything else works; episodes just will not remember each other.'
+              'ChromaDB를 사용할 수 없습니다. 다른 기능은 정상 작동하지만, 회차 간 장기 기억이 연동되지 않습니다.'
             }
           />
         </Panel>
@@ -95,12 +95,12 @@ export function MemoryInspector() {
   return (
     <>
       <PageHeader
-        title="Memory Inspector"
-        description="What earlier episodes established, and what they will hand the agents next time."
+        title="메모리 인스펙터"
+        description="이전 에피소드들이 기억하고 있는 설정과 복선(떡밥), 그리고 다음 회차 생성 시 AI에게 전달될 메모리를 조회합니다."
         actions={
           status && (
             <div className="flex items-center gap-2">
-              <Badge tone="good">{formatCount(stored)} memories</Badge>
+              <Badge tone="good">{formatCount(stored)}개 기억 저장됨</Badge>
             </div>
           )
         }
@@ -112,11 +112,11 @@ export function MemoryInspector() {
         tabs={[
           {
             id: 'threads',
-            label: 'Plot threads',
+            label: '복선 / 떡밥 장부',
             icon: Spline,
             count: threads?.active.length,
           },
-          { id: 'search', label: 'Search', icon: Search },
+          { id: 'search', label: '시맨틱 검색', icon: Search },
         ]}
       />
 
@@ -162,8 +162,8 @@ function ThreadBoard({
       <Panel>
         <EmptyState
           icon={Spline}
-          title="No plot threads yet"
-          description="The summarizer opens a thread whenever an episode raises a question it does not answer. Generate an episode and they will appear here."
+          title="등록된 복선(떡밥)이 없습니다"
+          description="에피소드 요약 생성 시 회차에서 던져진 미해결 질문이나 떡밥이 자동으로 감지되어 이곳에 기록됩니다. 회차를 집필하면 자동으로 나타납니다."
         />
       </Panel>
     )
@@ -175,26 +175,25 @@ function ThreadBoard({
         <div className="mb-5 flex items-start gap-3 rounded-xl border border-warn/25 bg-warn/8 px-4 py-3">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warn-bright" aria-hidden />
           <p className="text-xs leading-relaxed text-ink-dim">
-            {threads.stale.length} thread{threads.stale.length === 1 ? ' has' : 's have'} gone
-            quiet for {threads.stale_after_episodes} episodes or more. A reader starts to treat a
-            thread that quiet as dropped — the Director is told about these, but an outline that
-            touches one deliberately works better.
+            {threads.stale.length}개의 복선(떡밥)이 {threads.stale_after_episodes}화 이상 언급되지 않았습니다.
+            독자는 너무 오랫동안 언급되지 않은 복선을 회수되지 않은 맥거핀으로 여길 수 있습니다.
+            디렉터 AI에게 이 사실이 전달되지만, 개요에서 의도적으로 이 떡밥을 다루어 주면 더욱 좋습니다.
           </p>
         </div>
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Column
-          title="Open"
-          description="Questions the story has raised and not yet paid off."
+          title="미회수 떡밥 (Open)"
+          description="작품 속에서 던져졌으나 아직 해결되지 않은 의문과 사건들입니다."
           tone="accent"
           threads={threads.active}
           staleIds={staleIds}
           latestEpisode={latestEpisode}
         />
         <Column
-          title="Resolved"
-          description="Paid off, and safe to stop worrying about."
+          title="회수 완료 (Resolved)"
+          description="해결되었거나 의문이 풀려 더 이상 신경 쓰지 않아도 되는 떡밥들입니다."
           tone="good"
           threads={threads.resolved}
           staleIds={staleIds}
@@ -227,7 +226,7 @@ function Column({
       actions={<Badge tone={tone}>{threads.length}</Badge>}
     >
       {threads.length === 0 ? (
-        <p className="py-6 text-center text-xs text-ink-muted">Nothing here yet.</p>
+        <p className="py-6 text-center text-xs text-ink-muted">아직 항목이 없습니다.</p>
       ) : (
         <div className="space-y-2.5">
           {threads.map((thread) => (
@@ -273,11 +272,11 @@ function ThreadCard({
           {resolved ? (
             <Badge tone="good">
               <Check className="mr-0.5 inline size-3" />
-              ep {thread.resolved_in_episode}
+              제{thread.resolved_in_episode}화에서 회수
             </Badge>
           ) : (
             <Badge tone={thread.status === 'progressing' ? 'accent' : 'neutral'}>
-              {thread.status}
+              {thread.status === 'progressing' ? '진행 중' : '미회수'}
             </Badge>
           )}
         </div>
@@ -293,18 +292,18 @@ function ThreadCard({
 
       {thread.events.length > 0 && !resolved && (
         <p className="mt-2 text-xs leading-relaxed text-ink-muted">
-          <span className="text-ink-dim">Most recently — </span>
+          <span className="text-ink-dim">최근 전개 — </span>
           {thread.events.at(-1)}
         </p>
       )}
 
       <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[0.68rem] text-ink-muted">
-        <span>opened in ep {thread.opened_in_episode}</span>
+        <span>제{thread.opened_in_episode}화에서 시작</span>
         {!resolved && (
           <span className={cn(stale && 'font-medium text-warn-bright')}>
             {quietFor === 0
-              ? 'touched this episode'
-              : `unmentioned for ${quietFor} episode${quietFor === 1 ? '' : 's'}`}
+              ? '이번 회차에서 다뤄짐'
+              : `${quietFor}화 동안 미언급`}
           </span>
         )}
         {thread.linked_characters.length > 0 && (
@@ -323,9 +322,9 @@ function ThreadCard({
 // ==========================================================================
 
 const COLLECTION_LABELS: Record<string, string> = {
-  episode_summaries: 'episode summary',
-  interaction_records: 'interaction',
-  world_lore: 'world lore',
+  episode_summaries: '에피소드 요약',
+  interaction_records: '인물 상호작용',
+  world_lore: '세계관 설정',
 }
 
 function SearchPlayground() {
@@ -347,7 +346,7 @@ function SearchPlayground() {
       })
       setResults(found.results)
     } catch (cause) {
-      fromError(cause, 'The search failed.')
+      fromError(cause, '검색에 실패했습니다.')
     } finally {
       setSearching(false)
     }
@@ -359,26 +358,26 @@ function SearchPlayground() {
   return (
     <>
       <Panel
-        title="Semantic search"
-        description="The same retrieval the agents use. What comes back here is what they will be handed."
+        title="시맨틱 검색 (Semantic Search)"
+        description="AI 에이전트들이 정보를 회상할 때 사용하는 것과 동일한 벡터 검색입니다. 검색된 내용이 다음 회차 집필 시 AI에게 주어집니다."
       >
         <div className="flex flex-wrap items-end gap-3">
           <TextField
-            label="Query"
+            label="검색 질의어"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') void run()
             }}
-            placeholder="what did they promise each other?"
+            placeholder="그들은 서로에게 무엇을 약속했는가?"
             className="min-w-64 flex-1"
           />
           <SelectField
-            label="Only memories involving"
+            label="특정 인물 관련 기억만 필터링"
             value={characterId}
             onChange={(event) => setCharacterId(event.target.value)}
             options={[
-              { value: '', label: '— anyone —' },
+              { value: '', label: '— 모든 등장인물 —' },
               ...(project?.characters ?? []).map((character) => ({
                 value: character.id,
                 label: character.name,
@@ -394,7 +393,7 @@ function SearchPlayground() {
             disabled={!query.trim()}
             className="mb-6"
           >
-            Search
+            검색
           </Button>
         </div>
       </Panel>
@@ -404,16 +403,16 @@ function SearchPlayground() {
           <Panel>
             <EmptyState
               icon={Brain}
-              title="Ask it something"
-              description="Search is how you find out whether the story actually remembers what you think it does — before an episode relies on it."
+              title="무엇이든 질문해 보세요"
+              description="다음 회차를 쓰기 전, AI가 작가의 의도대로 이전 사건을 실제로 기억하고 있는지 미리 확인할 수 있습니다."
             />
           </Panel>
         ) : results.length === 0 ? (
           <Panel>
             <EmptyState
               icon={Search}
-              title="Nothing came back"
-              description="Either the story has not established this yet, or the phrasing is far from how it was recorded. Try the words a character would have used."
+              title="검색 결과가 없습니다"
+              description="아직 소설에서 다뤄지지 않았거나, 저장된 표현과 질의어가 너무 다릅니다. 등장인물이 실제로 말했을 법한 단어로 검색해 보세요."
             />
           </Panel>
         ) : (
@@ -444,8 +443,8 @@ function HitCard({ hit, nameOf }: { hit: MemoryHit; nameOf: (id: string) => stri
           <Badge tone="accent">
             {COLLECTION_LABELS[hit.collection] ?? hit.collection}
           </Badge>
-          {hit.episode_number > 0 && <Badge>ep {hit.episode_number}</Badge>}
-          {typeof sceneNumber === 'number' && <Badge>scene {sceneNumber}</Badge>}
+          {hit.episode_number > 0 && <Badge>제{hit.episode_number}화</Badge>}
+          {typeof sceneNumber === 'number' && <Badge>장면 {sceneNumber}</Badge>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {/* A bar, because a relevance is only meaningful next to the others. */}

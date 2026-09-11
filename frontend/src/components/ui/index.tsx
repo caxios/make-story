@@ -258,7 +258,7 @@ export function TagInput({
   hint,
   values,
   onChange,
-  placeholder = 'Type and press Enter',
+  placeholder = '입력 후 Enter 키를 누르세요',
 }: {
   label?: string
   hint?: string
@@ -549,7 +549,7 @@ export function Modal({
             <h2 className="text-sm font-semibold tracking-tight text-ink">{title}</h2>
             {description && <p className="mt-1 text-xs text-ink-muted">{description}</p>}
           </div>
-          <IconButton icon={X} title="Close" onClick={onClose} />
+          <IconButton icon={X} title="닫기" onClick={onClose} />
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
         {footer && (
@@ -601,7 +601,7 @@ export function Drawer({
             <h2 className="truncate text-base font-semibold tracking-tight text-ink">{title}</h2>
             {description && <p className="mt-0.5 text-xs text-ink-muted">{description}</p>}
           </div>
-          <IconButton icon={X} title="Close" onClick={onClose} />
+          <IconButton icon={X} title="닫기" onClick={onClose} />
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
         {footer && (
@@ -621,7 +621,7 @@ export function ConfirmDialog({
   onConfirm,
   title,
   message,
-  confirmLabel = 'Delete',
+  confirmLabel = '삭제',
   destructive = true,
 }: {
   open: boolean
@@ -639,7 +639,7 @@ export function ConfirmDialog({
       title={title}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>취소</Button>
           <Button
             variant={destructive ? 'danger' : 'primary'}
             onClick={() => {

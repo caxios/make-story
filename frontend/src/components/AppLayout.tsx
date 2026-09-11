@@ -33,13 +33,13 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: Home },
-  { to: '/world', label: 'World Builder', icon: BookOpen },
-  { to: '/characters', label: 'Character Workshop', icon: Users },
-  { to: '/episodes', label: 'Episode Queue', icon: ListOrdered },
-  { to: '/reading', label: 'Reading Room', icon: Feather },
-  { to: '/memory', label: 'Memory Inspector', icon: Brain },
-  { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/', label: '대시보드', icon: Home },
+  { to: '/world', label: '세계관 빌더', icon: BookOpen },
+  { to: '/characters', label: '캐릭터 워크숍', icon: Users },
+  { to: '/episodes', label: '에피소드 큐', icon: ListOrdered },
+  { to: '/reading', label: '리딩룸 (본문 열람)', icon: Feather },
+  { to: '/memory', label: '메모리 인스펙터', icon: Brain },
+  { to: '/settings', label: '설정', icon: Settings },
 ]
 
 const COLLAPSED_KEY = 'storyweaver.sidebar.collapsed'
@@ -95,7 +95,7 @@ function Sidebar({
       {mobileOpen && (
         <button
           type="button"
-          aria-label="Close navigation"
+          aria-label="네비게이션 닫기"
           onClick={onCloseMobile}
           className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm lg:hidden"
         />
@@ -119,14 +119,14 @@ function Sidebar({
               <p className="truncate text-sm font-semibold tracking-tight text-ink">
                 StoryWeaver
               </p>
-              <p className="truncate text-[0.7rem] text-ink-muted">Writer&rsquo;s studio</p>
+              <p className="truncate text-[0.7rem] text-ink-muted">소설 창작 스튜디오</p>
             </div>
           )}
           <button
             type="button"
             onClick={onCloseMobile}
             className="rounded-lg p-1.5 text-ink-muted hover:bg-white/5 hover:text-ink lg:hidden"
-            aria-label="Close navigation"
+            aria-label="네비게이션 닫기"
           >
             <X className="size-4" />
           </button>
@@ -184,12 +184,12 @@ function Sidebar({
               'transition-colors hover:bg-white/4 hover:text-ink lg:flex',
               collapsed && 'justify-center px-0',
             )}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
           >
             <ChevronLeft
               className={cn('size-4.5 transition-transform duration-300', collapsed && 'rotate-180')}
             />
-            {!collapsed && <span>Collapse</span>}
+            {!collapsed && <span>사이드바 접기</span>}
           </button>
         </div>
       </aside>
@@ -210,14 +210,14 @@ function Header({ onOpenMobile }: { onOpenMobile: () => void }) {
         type="button"
         onClick={onOpenMobile}
         className="-ml-1 rounded-lg p-2 text-ink-dim hover:bg-white/5 hover:text-ink lg:hidden"
-        aria-label="Open navigation"
+        aria-label="네비게이션 열기"
       >
         <Menu className="size-5" />
       </button>
 
       <div className="min-w-0 flex-1">
         <h1 className="truncate text-[0.95rem] font-semibold tracking-tight text-ink">
-          {project?.name || 'Untitled Story'}
+          {project?.name || '제목 없는 이야기'}
         </h1>
         {project?.world.title && (
           <p className="truncate text-xs text-ink-muted">{project.world.title}</p>
@@ -227,15 +227,15 @@ function Header({ onOpenMobile }: { onOpenMobile: () => void }) {
       <div className="flex items-center gap-2">
         {stats && (
           <>
-            <Pill tone="good" label={`${stats.episodes_completed} written`} />
-            <Pill tone="neutral" label={`${stats.episodes_queued} queued`} hideBelowSm />
+            <Pill tone="good" label={`${stats.episodes_completed}화 집필 완료`} />
+            <Pill tone="neutral" label={`${stats.episodes_queued}화 대기 중`} hideBelowSm />
             <Pill
               tone="neutral"
-              label={`${formatCount(stats.total_words)} words`}
+              label={`총 ${formatCount(stats.total_words)}자`}
               hideBelowSm
             />
             {stats.open_thread_count > 0 && (
-              <Pill tone="accent" label={`${stats.open_thread_count} threads`} hideBelowSm />
+              <Pill tone="accent" label={`진행 중 떡밥 ${stats.open_thread_count}개`} hideBelowSm />
             )}
           </>
         )}

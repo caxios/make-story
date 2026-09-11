@@ -106,7 +106,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       error: (message) => toast(message, 'error'),
       info: (message) => toast(message, 'info'),
       warning: (message) => toast(message, 'warning'),
-      fromError: (cause, fallback = 'Something went wrong.') => {
+      fromError: (cause, fallback = '오류가 발생했습니다.') => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return
         const message =
           cause instanceof ApiError
@@ -155,7 +155,7 @@ function ToastViewport({
               type="button"
               onClick={() => onDismiss(toast.id)}
               className="-mr-1 -mt-0.5 rounded-md p-1 text-ink-muted transition-colors hover:bg-white/5 hover:text-ink"
-              aria-label="Dismiss"
+              aria-label="닫기"
             >
               <X className="size-3.5" />
             </button>

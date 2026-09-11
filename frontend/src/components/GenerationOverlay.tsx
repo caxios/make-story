@@ -30,11 +30,11 @@ import type { GenerationStage } from '@/types/storyweaver'
 
 /** The LangGraph flow, as the five steps an author would name. */
 const STEPS: { stage: GenerationStage; label: string; icon: LucideIcon }[] = [
-  { stage: 'planning', label: 'Director', icon: Clapperboard },
-  { stage: 'simulating', label: 'Scene Runner', icon: Users },
-  { stage: 'checking', label: 'Lore Checker', icon: ScanSearch },
-  { stage: 'writing', label: 'Writer', icon: PenLine },
-  { stage: 'recording', label: 'Memory', icon: Save },
+  { stage: 'planning', label: '디렉터 (Director)', icon: Clapperboard },
+  { stage: 'simulating', label: '장면 시뮬레이터 (Runner)', icon: Users },
+  { stage: 'checking', label: '설정 검증 (Checker)', icon: ScanSearch },
+  { stage: 'writing', label: '작가 (Writer)', icon: PenLine },
+  { stage: 'recording', label: '메모리 저장 (Memory)', icon: Save },
 ]
 
 /** Which step is lit, and which are behind it. */
@@ -47,8 +47,8 @@ function stepIndex(stage: GenerationStage | '' | undefined): number {
 
 function elapsedLabel(ms: number): string {
   const seconds = Math.floor(ms / 1000)
-  if (seconds < 60) return `${seconds}s`
-  return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`
+  if (seconds < 60) return `${seconds}초`
+  return `${Math.floor(seconds / 60)}분 ${String(seconds % 60).padStart(2, '0')}초`
 }
 
 export function GenerationOverlay({
@@ -97,7 +97,7 @@ export function GenerationOverlay({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Generating episode ${episodeNumber}`}
+        aria-label={`제${episodeNumber}화 집필 중`}
         className="sw-glass animate-rise relative flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl"
       >
         {/* --- Header --- */}
@@ -108,8 +108,7 @@ export function GenerationOverlay({
               {done && <Check className="size-4 shrink-0 text-good-bright" />}
               {failed && <AlertTriangle className="size-4 shrink-0 text-bad-bright" />}
               <span className="truncate">
-                {done ? 'Written' : failed ? 'Generation failed' : 'Generating'} · Episode{' '}
-                {episodeNumber}
+                {done ? '집필 완료' : failed ? '생성 실패' : '집필 중'} · 제{episodeNumber}화
               </span>
             </h2>
             {episodeTitle && <p className="mt-0.5 truncate text-xs text-ink-muted">{episodeTitle}</p>}
@@ -118,8 +117,8 @@ export function GenerationOverlay({
           <button
             type="button"
             onClick={onClose}
-            title={running ? 'Stop watching (generation continues)' : 'Close'}
-            aria-label={running ? 'Stop watching' : 'Close'}
+            title={running ? '화면 닫기 (백그라운드에서 집필 지속)' : '닫기'}
+            aria-label={running ? '화면 닫기' : '닫기'}
             className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-white/5 hover:text-ink"
           >
             <X className="size-4" />
@@ -130,9 +129,7 @@ export function GenerationOverlay({
           {/* --- Resumption notice --- */}
           {start?.resuming_from_scene != null && (
             <div className="mb-5 rounded-xl border border-accent/25 bg-accent/8 px-4 py-2.5 text-xs leading-relaxed text-accent-bright">
-              Resuming from scene {start.resuming_from_scene} — the{' '}
-              {start.resuming_from_scene - 1} scene
-              {start.resuming_from_scene === 2 ? '' : 's'} before it are already written and saved.
+              장면 {start.resuming_from_scene}부터 이어쓰는 중 — 이전 {start.resuming_from_scene - 1}개 장면은 이미 작성되어 저장되어 있습니다.
             </div>
           )}
 
@@ -142,7 +139,7 @@ export function GenerationOverlay({
           <div className="mt-6">
             <div className="mb-2 flex items-baseline justify-between gap-3">
               <p className="min-w-0 truncate text-sm text-ink">
-                {failed ? 'Stopped' : (progress?.label ?? 'Connecting…')}
+                {failed ? '생성 중단됨' : (progress?.label ?? '연결 중…')}
               </p>
               <span className="shrink-0 font-mono text-xs tabular-nums text-ink-muted">
                 {Math.round(fraction * 100)}%
@@ -164,17 +161,17 @@ export function GenerationOverlay({
             <div className="mt-5 rounded-xl border border-line bg-surface/60 px-4 py-3.5">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium text-ink">
-                  Scene {progress.scene.number}
+                  장면 {progress.scene.number}
                   {progress.total_scenes > 0 && `/${progress.total_scenes}`} ·{' '}
                   {progress.scene.title}
                 </span>
                 {progress.retry_count > 0 && (
-                  <Badge tone="warn">re-run {progress.retry_count}</Badge>
+                  <Badge tone="warn">재시도 {progress.retry_count}</Badge>
                 )}
               </div>
               {progress.scene.objective && (
                 <p className="mt-1.5 text-xs leading-relaxed text-ink-dim">
-                  <span className="text-ink-muted">Goal — </span>
+                  <span className="text-ink-muted">장면 목표 — </span>
                   {progress.scene.objective}
                 </p>
               )}
@@ -188,7 +185,7 @@ export function GenerationOverlay({
               )}
               {progress.stage === 'simulating' && progress.turns > 0 && (
                 <p className="mt-2.5 font-mono text-xs text-ink-muted">
-                  turn {progress.turns}/{progress.max_turns}
+                  {progress.turns}/{progress.max_turns} 턴 진행
                 </p>
               )}
             </div>
@@ -197,13 +194,13 @@ export function GenerationOverlay({
           {/* --- The running log --- */}
           <div className="mt-5">
             <p className="mb-2 text-xs font-medium tracking-wide text-ink-muted uppercase">
-              Agent log
+              에이전트 실행 로그
             </p>
             <div
               ref={logRef}
               className="max-h-52 space-y-1 overflow-y-auto rounded-xl border border-line bg-surface/60 px-4 py-3 font-mono text-xs leading-relaxed"
             >
-              {log.length === 0 && <p className="text-ink-muted">Waiting for the first stage…</p>}
+              {log.length === 0 && <p className="text-ink-muted">첫 번째 작업 단계 대기 중…</p>}
               {log.map((line, index) => (
                 <p key={index} className="flex items-start gap-2 text-ink-dim">
                   <Check className="mt-0.5 size-3 shrink-0 text-good" aria-hidden />
@@ -228,8 +225,8 @@ export function GenerationOverlay({
               </p>
               <p className="mt-2.5 text-xs leading-relaxed text-ink-muted">
                 {error.resumable
-                  ? `The ${error.scenes_completed} scene${error.scenes_completed === 1 ? '' : 's'} finished before this are saved on disk. Generating again picks up from there rather than starting over.`
-                  : 'Nothing was written, so nothing was lost. The episode is back in the queue.'}
+                  ? `이전에 작성된 ${error.scenes_completed}개 장면은 디스크에 안전하게 보존되었습니다. 다시 생성하면 처음부터 시작하지 않고 중단된 지점부터 이어서 집필합니다.`
+                  : '작성된 본문이 없어 유실된 내용이 없습니다. 에피소드가 큐로 복귀되었습니다.'}
               </p>
             </div>
           )}
@@ -239,13 +236,12 @@ export function GenerationOverlay({
             <div className="mt-5 rounded-xl border border-good/25 bg-good/8 px-4 py-3.5">
               <p className="flex items-center gap-2 text-sm font-medium text-good-bright">
                 <FileText className="size-4" />
-                {formatCount(result.words)} words across {result.scenes} scene
-                {result.scenes === 1 ? '' : 's'}
+                {result.scenes}개 장면에 걸쳐 총 {formatCount(result.words)}자 집필 완료
               </p>
               <p className="mt-1 text-xs text-ink-muted">
                 {result.recorded_to_memory
-                  ? 'Summarised into memory, so later episodes can refer back to it.'
-                  : 'Not recorded to memory — later episodes will not remember this one.'}
+                  ? '줄거리가 메모리에 요약 및 저장되어, 다음 회차에서 이 사건을 기억하고 참조합니다.'
+                  : '메모리에 기록되지 않았습니다.'}
               </p>
             </div>
           )}
@@ -259,23 +255,23 @@ export function GenerationOverlay({
               <>
                 <span aria-hidden>·</span>
                 <span>
-                  {formatCount(result?.usage?.total_tokens ?? progress?.tokens ?? 0)} tokens
+                  {formatCount(result?.usage?.total_tokens ?? progress?.tokens ?? 0)} 토큰
                 </span>
               </>
             )}
             {(result?.usage?.calls ?? progress?.calls ?? 0) > 0 && (
               <>
                 <span aria-hidden>·</span>
-                <span>{result?.usage?.calls ?? progress?.calls} calls</span>
+                <span>{result?.usage?.calls ?? progress?.calls}회 호출</span>
               </>
             )}
           </div>
 
           <div className="flex items-center gap-2">
-            <Button onClick={onClose}>{running ? 'Stop watching' : 'Close'}</Button>
+            <Button onClick={onClose}>{running ? '화면 닫기' : '닫기'}</Button>
             {done && (
               <Button variant="primary" onClick={onRead}>
-                Read it
+                본문 읽기
               </Button>
             )}
           </div>

@@ -47,12 +47,12 @@ export function Dashboard() {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold tracking-tight text-ink">
-          {project.name || 'Untitled Story'}
+          {project.name || '제목 없는 이야기'}
         </h2>
         <p className="mt-1 text-sm text-ink-dim">
           {project.world.overview.trim()
             ? [project.world.genre, project.world.tone].filter(Boolean).join(' · ')
-            : 'No world yet — start in World Builder.'}
+            : '세계관 설정이 아직 없습니다 — 세계관 빌더에서 시작해 보세요.'}
         </p>
       </div>
 
@@ -64,36 +64,36 @@ export function Dashboard() {
             total={stats.episodes_total}
           />
           <div className="min-w-0">
-            <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">Episodes</p>
+            <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">집필 회차</p>
             <p className="mt-1 text-2xl font-semibold tracking-tight text-ink tabular-nums">
               {stats.episodes_completed}
               <span className="text-base font-normal text-ink-muted">/{stats.episodes_total}</span>
             </p>
-            <p className="mt-0.5 text-xs text-ink-muted">{stats.episodes_queued} queued</p>
+            <p className="mt-0.5 text-xs text-ink-muted">{stats.episodes_queued}화 대기 중</p>
           </div>
         </Panel>
 
-        <Stat icon={FileText} label="Words" value={formatCount(stats.total_words)} />
-        <Stat icon={Users} label="Cast" value={stats.character_count} />
+        <Stat icon={FileText} label="총 글자 수" value={formatCount(stats.total_words)} />
+        <Stat icon={Users} label="등장인물" value={`${stats.character_count}명`} />
         <Stat
           icon={Spline}
-          label="Open threads"
-          value={stats.memory_available ? stats.open_thread_count : '—'}
-          hint={stats.memory_available ? '떡밥 still unresolved' : 'Memory unavailable'}
+          label="진행 중인 떡밥"
+          value={stats.memory_available ? `${stats.open_thread_count}개` : '—'}
+          hint={stats.memory_available ? '아직 회수되지 않은 복선' : '메모리 비활성화'}
         />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* --- Quick actions --- */}
-        <Panel title="Next" description="The obvious things to do from here.">
+        <Panel title="빠른 작업" description="지금 바로 진행할 수 있는 추천 작업입니다.">
           <div className="space-y-2">
             <Action
               icon={Sparkles}
               primary
               title={
                 nextQueued
-                  ? `Generate episode ${nextQueued.episode_number}`
-                  : 'Nothing queued to generate'
+                  ? `제 ${nextQueued.episode_number}화 생성하기`
+                  : '생성 대기 중인 회차가 없습니다'
               }
               detail={nextQueued?.title || nextQueued?.author_storyline || undefined}
               disabled={!nextQueued}
@@ -101,26 +101,26 @@ export function Dashboard() {
             />
             <Action
               icon={Plus}
-              title="Add an episode outline"
-              detail="A rough paragraph is enough — the Director fills in the rest."
+              title="새 에피소드 줄거리 추가하기"
+              detail="대략적인 줄거리만 적어도 감독 에이전트가 씬을 쪼개고 살을 붙입니다."
               onClick={() => navigate('/episodes')}
             />
             <Action
               icon={Users}
-              title="Open the Character Workshop"
-              detail={`${stats.character_count} character${stats.character_count === 1 ? '' : 's'} in the cast`}
+              title="캐릭터 워크숍 열기"
+              detail={`현재 등장인물 ${stats.character_count}명 등록됨`}
               onClick={() => navigate('/characters')}
             />
           </div>
         </Panel>
 
         {/* --- Recent chapters --- */}
-        <Panel title="Recently written" description="The last three finished chapters.">
+        <Panel title="최근 작성된 회차" description="가장 최근 완성된 3개 회차입니다.">
           {recent.length === 0 ? (
             <EmptyState
               icon={BookOpen}
-              title="Nothing written yet"
-              description="Queue an outline and generate it, and the chapter will show up here."
+              title="아직 작성된 회차가 없습니다"
+              description="에피소드 큐에서 줄거리를 추가하고 첫 번째 회차를 생성해 보세요."
             />
           ) : (
             <div className="space-y-2">
@@ -138,26 +138,24 @@ export function Dashboard() {
 
       {/* --- Health --- */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Panel title="Memory">
+        <Panel title="메모리 / 기억 저장소">
           {stats.memory_available ? (
             <p className="text-sm text-ink-dim">
-              Running, with <span className="font-medium text-ink">{stats.open_thread_count}</span>{' '}
-              open plot thread{stats.open_thread_count === 1 ? '' : 's'}. Episodes can refer back to
-              what earlier ones established.
+              정상 작동 중입니다. <span className="font-medium text-ink">떡밥 {stats.open_thread_count}개</span>가
+              추적되고 있으며, 새로운 회차 생성 시 이전 사건들을 유기적으로 참조합니다.
             </p>
           ) : (
             <p className="text-sm text-ink-dim">
-              Unavailable — {stats.memory_error || 'ChromaDB did not start'}. Everything else works;
-              episodes just will not remember each other.
+              비활성화됨 — {stats.memory_error || 'ChromaDB가 시작되지 않았습니다'}.
             </p>
           )}
         </Panel>
 
-        <Panel title="Model">
+        <Panel title="AI 모델">
           <p className="font-mono text-sm text-ink-dim">{health?.model ?? '—'}</p>
           {health && !health.api_key_configured && (
             <p className="mt-2 text-sm text-warn-bright">
-              GOOGLE_API_KEY is unset, so generation will fail until it is filled in.
+              GOOGLE_API_KEY가 설정되지 않아 생성이 실패할 수 있습니다.
             </p>
           )}
         </Panel>
@@ -176,15 +174,15 @@ function Offline({ message, onRetry }: { message: string; onRetry: () => void })
       </div>
       <div>
         <h2 className="text-lg font-semibold tracking-tight text-ink">
-          The backend is not answering
+          백엔드 서버에 연결할 수 없습니다
         </h2>
         <p className="mt-1.5 max-w-md text-sm leading-relaxed text-ink-dim">{message}</p>
       </div>
       <code className="rounded-lg border border-line bg-surface px-3 py-2 font-mono text-xs text-ink-dim">
-        uvicorn storyweaver.server:app --reload --port 8000
+        .venv\Scripts\uvicorn.exe storyweaver.server:app --reload --port 8001
       </code>
       <Button variant="primary" onClick={onRetry}>
-        Try again
+        다시 시도
       </Button>
     </div>
   )
@@ -292,15 +290,15 @@ function RecentEpisode({ episode, onOpen }: { episode: Episode; onOpen: () => vo
       <CheckCircle2 className="size-4 shrink-0 text-good" />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium text-ink">
-          {episode.episode_number}. {episode.title || '(untitled)'}
+          {episode.episode_number}화. {episode.title || '(제목 없음)'}
         </span>
         <span className="mt-0.5 flex items-center gap-2 text-xs text-ink-muted">
-          {formatCount(episode.final_text.split(/\s+/).filter(Boolean).length)} words
+          {formatCount(episode.final_text.split(/\s+/).filter(Boolean).length)}자
           <span aria-hidden>·</span>
-          {episode.scenes.length} scene{episode.scenes.length === 1 ? '' : 's'}
+          씬 {episode.scenes.length}개
         </span>
       </span>
-      <Badge tone="good">Read</Badge>
+      <Badge tone="good">본문 읽기</Badge>
     </button>
   )
 }

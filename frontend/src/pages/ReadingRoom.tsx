@@ -100,10 +100,10 @@ export function ReadingRoom() {
     try {
       await api.updateEpisode(episode.episode_number, { final_text: draft })
       await refresh()
-      success('Your edits are saved')
+      success('수정사항이 저장되었습니다')
       setEditing(false)
     } catch (cause) {
-      fromError(cause, 'Could not save the chapter.')
+      fromError(cause, '회차 본문을 저장하지 못했습니다.')
     } finally {
       setSaving(false)
     }
@@ -115,9 +115,9 @@ export function ReadingRoom() {
       await api.deleteEpisode(episode.episode_number)
       await refresh()
       setSelected(null)
-      success(`Episode ${episode.episode_number} deleted`)
+      success(`제${episode.episode_number}화가 삭제되었습니다`)
     } catch (cause) {
-      fromError(cause, 'Could not delete the episode.')
+      fromError(cause, '회차를 삭제하지 못했습니다.')
     }
   }
 
@@ -128,7 +128,7 @@ export function ReadingRoom() {
       await refresh()
       navigate('/episodes')
     } catch (cause) {
-      fromError(cause, 'Could not re-queue the episode.')
+      fromError(cause, '회차를 대기열로 되돌리지 못했습니다.')
     }
   }
 
@@ -140,9 +140,9 @@ export function ReadingRoom() {
           ? await api.downloadProjectArchive()
           : await api.downloadEpisode(episode!.episode_number, kind)
       api.saveBlob(file.blob, file.filename)
-      success(`Downloaded ${file.filename}`)
+      success(`${file.filename} 다운로드 완료`)
     } catch (cause) {
-      fromError(cause, 'Could not build the download.')
+      fromError(cause, '다운로드 파일을 생성하지 못했습니다.')
     }
   }
 
@@ -154,11 +154,11 @@ export function ReadingRoom() {
       <Panel>
         <EmptyState
           icon={BookOpen}
-          title="Nothing written yet"
-          description="Finished chapters land here. Queue an outline and generate it in the Episode Queue."
+          title="아직 작성된 회차가 없습니다"
+          description="집필이 완료된 회차가 이곳에 표시됩니다. 에피소드 큐에서 개요를 등록하고 집필을 시작하세요."
           action={
             <Button variant="primary" onClick={() => navigate('/episodes')}>
-              Go to the queue
+              에피소드 큐로 이동
             </Button>
           }
         />
@@ -173,7 +173,7 @@ export function ReadingRoom() {
       {/* --- Chapters --- */}
       <nav className="hidden w-52 shrink-0 lg:block">
         <p className="mb-2 px-2 text-xs font-medium tracking-wide text-ink-muted uppercase">
-          Chapters
+          회차 목록
         </p>
         <ol className="space-y-0.5">
           {completed.map((item) => {
@@ -195,7 +195,7 @@ export function ReadingRoom() {
                     <span className="font-mono text-xs text-ink-muted tabular-nums">
                       {item.episode_number}
                     </span>
-                    <span className="truncate">{item.title || '(untitled)'}</span>
+                    <span className="truncate">{item.title || '(제목 없음)'}</span>
                   </span>
                 </button>
               </li>
@@ -209,37 +209,37 @@ export function ReadingRoom() {
         <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="accent">Episode {episode.episode_number}</Badge>
-              <Badge>{formatCount(count)} words</Badge>
-              <Badge>{formatCount(characters(episode.final_text))} chars</Badge>
+              <Badge tone="accent">제{episode.episode_number}화</Badge>
+              <Badge>{formatCount(count)} 단어</Badge>
+              <Badge>{formatCount(characters(episode.final_text))} 자</Badge>
               {episode.scenes.length > 0 && (
                 <Badge>
-                  {episode.scenes.length} scene{episode.scenes.length === 1 ? '' : 's'}
+                  {episode.scenes.length}개 장면
                 </Badge>
               )}
             </div>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink">
-              {episode.title || '(untitled)'}
+              {episode.title || '(제목 없음)'}
             </h2>
           </div>
 
           <div className="flex items-center gap-1">
             <IconButton
               icon={Type}
-              title="Typography"
+              title="서체 및 뷰어 설정"
               onClick={() => setShowTypography(true)}
             />
             <IconButton
               icon={editing ? X : Pencil}
-              title={editing ? 'Leave edit mode' : 'Edit this chapter'}
+              title={editing ? '편집 모드 종료' : '이 회차 편집'}
               onClick={() => (editing ? setEditing(false) : startEditing())}
             />
             <IconButton
               icon={RotateCcw}
-              title="Regenerate this chapter"
+              title="이 회차 다시 생성"
               onClick={() => setRegenerating(true)}
             />
-            <IconButton icon={Trash2} title="Delete this chapter" onClick={() => setDeleting(true)} />
+            <IconButton icon={Trash2} title="이 회차 삭제" onClick={() => setDeleting(true)} />
           </div>
         </header>
 
@@ -263,12 +263,12 @@ export function ReadingRoom() {
             />
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-ink-muted">
-                {formatCount(words(draft))} words
+                {formatCount(words(draft))} 단어
                 {words(draft) !== count &&
                   ` · ${words(draft) > count ? '+' : ''}${formatCount(words(draft) - count)}`}
               </p>
               <div className="flex gap-2">
-                <Button onClick={() => setEditing(false)}>Cancel</Button>
+                <Button onClick={() => setEditing(false)}>취소</Button>
                 <Button
                   variant="primary"
                   icon={Check}
@@ -276,7 +276,7 @@ export function ReadingRoom() {
                   loading={saving}
                   disabled={draft === episode.final_text}
                 >
-                  Save changes
+                  변경사항 저장
                 </Button>
               </div>
             </div>
@@ -289,24 +289,24 @@ export function ReadingRoom() {
 
         {/* --- Export --- */}
         <Panel
-          title="Export"
-          description="Built by the backend, so a download matches exactly what is on disk."
+          title="내보내기 (Export)"
+          description="백엔드에서 직접 생성하므로 현재 디스크에 저장된 본문 및 프로젝트 상태와 완전히 일치합니다."
           className="mt-6"
         >
           <div className="flex flex-wrap gap-2">
             <Button icon={FileText} onClick={() => void download('markdown')}>
-              Chapter .md
+              회차 마크다운 (.md)
             </Button>
             <Button icon={FileText} onClick={() => void download('docx')}>
-              Chapter .docx
+              회차 워드 문서 (.docx)
             </Button>
             <Button icon={Download} onClick={() => void download('zip')}>
-              Whole project .zip
+              프로젝트 전체 백업 (.zip)
             </Button>
           </div>
           <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-            The archive holds the project file plus everything the story remembers — the vector
-            store and the plot threads — so it restores as a working project, not just text.
+            전체 백업 파일(.zip)에는 본문 텍스트뿐만 아니라 인물 설정, 세계관, 벡터 메모리와 복선 장부까지
+            모두 포함되어 있어 다른 환경에서도 완벽히 복원할 수 있습니다.
           </p>
         </Panel>
       </div>
@@ -315,24 +315,24 @@ export function ReadingRoom() {
       <Modal
         open={showTypography}
         onClose={() => setShowTypography(false)}
-        title="Typography"
-        description="Yours alone, remembered in this browser."
+        title="서체 및 뷰어 설정"
+        description="이 브라우저에 개인 설정이 안전하게 기억됩니다."
         footer={
           <>
-            <Button onClick={() => setReader(DEFAULT_READER)}>Reset</Button>
+            <Button onClick={() => setReader(DEFAULT_READER)}>기본값 복원</Button>
             <Button variant="primary" onClick={() => setShowTypography(false)}>
-              Done
+              완료
             </Button>
           </>
         }
       >
         <div className="space-y-5">
           <div>
-            <p className="mb-2 text-xs font-medium text-ink-dim">Face</p>
+            <p className="mb-2 text-xs font-medium text-ink-dim">서체 스타일</p>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { serif: true, label: 'Editorial serif', sample: 'Lora' },
-                { serif: false, label: 'Modern sans', sample: 'Inter' },
+                { serif: true, label: '명조체 (Serif)', sample: 'Lora' },
+                { serif: false, label: '고딕체 (Sans)', sample: 'Inter' },
               ].map((option) => (
                 <button
                   key={option.label}
@@ -360,7 +360,7 @@ export function ReadingRoom() {
           </div>
 
           <Slider
-            label="Size"
+            label="글자 크기"
             min={16}
             max={24}
             step={1}
@@ -369,7 +369,7 @@ export function ReadingRoom() {
             format={(value) => `${value}px`}
           />
           <Slider
-            label="Line spacing"
+            label="줄 간격"
             min={1.6}
             max={2.2}
             step={0.05}
@@ -378,18 +378,18 @@ export function ReadingRoom() {
             format={(value) => value.toFixed(2)}
           />
           <Slider
-            label="Column width"
+            label="본문 너비"
             min={55}
             max={80}
             step={1}
             value={reader.measure}
             onChange={(measure) => setReader({ ...reader, measure })}
-            format={(value) => `${value} characters`}
+            format={(value) => `${value}자 너비`}
           />
 
           <div className="rounded-xl border border-line bg-surface px-4 py-3">
             <Prose
-              text={'"이건 아무것도 아니야." 그는 말했다.\n\nThe corridor smelled of cold stone and older rain.'}
+              text={'"이건 아무것도 아니야." 그는 말했다.\n\n차가운 돌벽 사이로 오래된 빗물 냄새가 번져왔다.'}
               settings={reader}
               className="!max-w-none"
             />
@@ -401,11 +401,11 @@ export function ReadingRoom() {
         open={deleting}
         onClose={() => setDeleting(false)}
         onConfirm={() => void remove()}
-        title={`Delete episode ${episode.episode_number}?`}
+        title={`제${episode.episode_number}화를 삭제하시겠습니까?`}
         message={
           <>
-            {formatCount(count)} words of finished prose go with it, and every later episode
-            moves up a number to close the gap.
+            작성 완료된 {formatCount(count)} 단어 분량의 본문이 완전히 삭제되며, 이후 회차 번호가
+            하나씩 앞당겨집니다.
           </>
         }
       />
@@ -414,13 +414,13 @@ export function ReadingRoom() {
         open={regenerating}
         onClose={() => setRegenerating(false)}
         onConfirm={() => void requeue()}
-        title={`Regenerate episode ${episode.episode_number}?`}
-        confirmLabel="Re-queue it"
+        title={`제${episode.episode_number}화를 다시 생성하시겠습니까?`}
+        confirmLabel="대기열로 되돌리기"
         destructive={false}
         message={
           <>
-            This puts the chapter back in the queue and takes you there. The existing{' '}
-            {formatCount(count)} words stay on disk until you actually generate it again.
+            이 회차를 다시 에피소드 큐로 되돌리고 큐 화면으로 이동합니다. 기존에 작성된{' '}
+            {formatCount(count)} 단어의 본문은 실제로 재생성을 시작하기 전까지 디스크에 보존됩니다.
           </>
         }
       />
