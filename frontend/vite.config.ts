@@ -22,6 +22,12 @@ export default defineConfig({
         // Generation is a Server-Sent Events stream: without this the proxy
         // buffers the whole run and the progress arrives all at once, at the end.
         configure: (proxy) => {
+          proxy.on('error', (_err, _req, res) => {
+            if ('writeHead' in res && typeof res.writeHead === 'function' && !res.headersSent) {
+              res.writeHead(503, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ detail: 'Backend is starting up...' }))
+            }
+          })
           proxy.on('proxyRes', (proxyRes) => {
             if (proxyRes.headers['content-type']?.includes('text/event-stream')) {
               delete proxyRes.headers['content-length']
