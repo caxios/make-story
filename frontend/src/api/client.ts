@@ -260,6 +260,15 @@ export const getRunningGenerations = () => request<number[]>('/api/generation/ru
 export const generationStreamUrl = (episodeNumber: number, maxTurns: number) =>
   `/api/generation/stream/${episodeNumber}?max_turns=${maxTurns}`
 
+/**
+ * Would the stream start this episode? Asked before opening it, because an
+ * EventSource that is refused cannot read why — this ordinary request can.
+ */
+export const checkGeneration = (episodeNumber: number, maxTurns: number) =>
+  request<{ episode_number: number; resumable: boolean; scenes_completed: number }>(
+    `/api/generation/check/${episodeNumber}?max_turns=${maxTurns}`,
+  )
+
 // ==========================================================================
 // Memory
 // ==========================================================================

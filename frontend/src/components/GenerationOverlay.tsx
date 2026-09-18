@@ -85,7 +85,16 @@ export function GenerationOverlay({
 
   const done = status === 'complete'
   const failed = status === 'error'
-  const running = !done && !failed
+  // The stream dropped, but the job is still running on the backend and will
+  // save its own result: not a failure, just no longer watchable from here.
+  const detached = status === 'detached'
+  const running = !done && !failed && !detached
+  // Refused before anything started: nothing was spent, nothing was changed.
+  const neverStarted =
+    failed &&
+    error !== null &&
+    (['Refused', 'Starting', 'Unreachable'].includes(error.type) ||
+      error.type.startsWith('HTTP '))
   const elapsed = startedAt === null ? 0 : (finishedAt ?? now) - startedAt
   const current = stepIndex(progress?.stage)
   const fraction = done ? 1 : (progress?.fraction ?? 0.02)
@@ -108,7 +117,16 @@ export function GenerationOverlay({
               {done && <Check className="size-4 shrink-0 text-good-bright" />}
               {failed && <AlertTriangle className="size-4 shrink-0 text-bad-bright" />}
               <span className="truncate">
-                {done ? '집필 완료' : failed ? '생성 실패' : '집필 중'} · 제{episodeNumber}화
+                {done
+                  ? '집필 완료'
+                  : failed
+                    ? neverStarted
+                      ? '생성을 시작할 수 없음'
+                      : '생성 실패'
+                    : detached
+                      ? '백그라운드에서 집필 중'
+                      : '집필 중'}{' '}
+                · 제{episodeNumber}화
               </span>
             </h2>
             {episodeTitle && <p className="mt-0.5 truncate text-xs text-ink-muted">{episodeTitle}</p>}
@@ -139,7 +157,13 @@ export function GenerationOverlay({
           <div className="mt-6">
             <div className="mb-2 flex items-baseline justify-between gap-3">
               <p className="min-w-0 truncate text-sm text-ink">
-                {failed ? '생성 중단됨' : (progress?.label ?? '연결 중…')}
+                {failed
+                  ? neverStarted
+                    ? '시작되지 않음'
+                    : '생성 중단됨'
+                  : detached
+                    ? '화면 연결이 끊겼습니다 — 서버에서는 계속 집필 중'
+                    : (progress?.label ?? generation.waiting ?? '연결 중…')}
               </p>
               <span className="shrink-0 font-mono text-xs tabular-nums text-ink-muted">
                 {Math.round(fraction * 100)}%
@@ -216,6 +240,18 @@ export function GenerationOverlay({
             </div>
           </div>
 
+          {/* --- Detached --- */}
+          {detached && (
+            <div className="mt-5 rounded-xl border border-accent/25 bg-accent/8 px-4 py-3.5">
+              <p className="text-sm font-medium text-accent-bright">생성은 계속되고 있습니다</p>
+              <p className="mt-1 text-xs leading-relaxed text-ink-dim">
+                브라우저와 서버 사이의 연결만 끊겼고, 집필은 서버에서 그대로 진행 중입니다.
+                끝나면 결과가 자동으로 저장되고, 에피소드 대기열에도 알아서 반영됩니다. 이 창은
+                닫으셔도 됩니다.
+              </p>
+            </div>
+          )}
+
           {/* --- Failure --- */}
           {failed && error && (
             <div className="mt-5 rounded-xl border border-bad/30 bg-bad/8 px-4 py-3.5">
@@ -224,9 +260,11 @@ export function GenerationOverlay({
                 {error.message}
               </p>
               <p className="mt-2.5 text-xs leading-relaxed text-ink-muted">
-                {error.resumable
-                  ? `이전에 작성된 ${error.scenes_completed}개 장면은 디스크에 안전하게 보존되었습니다. 다시 생성하면 처음부터 시작하지 않고 중단된 지점부터 이어서 집필합니다.`
-                  : '작성된 본문이 없어 유실된 내용이 없습니다. 에피소드가 큐로 복귀되었습니다.'}
+                {neverStarted
+                  ? '생성이 시작되지 않았으므로 비용이 들지 않았고, 데이터도 바뀌지 않았습니다.'
+                  : error.resumable
+                    ? `이전에 작성된 ${error.scenes_completed}개 장면은 디스크에 안전하게 보존되었습니다. 다시 생성하면 처음부터 시작하지 않고 중단된 지점부터 이어서 집필합니다.`
+                    : '작성된 본문이 없어 유실된 내용이 없습니다. 에피소드가 큐로 복귀되었습니다.'}
               </p>
             </div>
           )}

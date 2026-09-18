@@ -96,6 +96,20 @@ export function EpisodeQueue() {
     }
   }, [generation.status, refresh, loadPending])
 
+  // A run nobody is watching — the overlay was closed, or the page reloaded —
+  // still finishes and saves on the backend. Poll while one is in flight, so
+  // its card flips to "completed" without the author having to reload.
+  const unwatched =
+    episodes.some((episode) => episode.status === 'in_progress') && !generation.isRunning
+  useEffect(() => {
+    if (!unwatched) return
+    const timer = setInterval(() => {
+      void refresh()
+      loadPending()
+    }, 5000)
+    return () => clearInterval(timer)
+  }, [unwatched, refresh, loadPending])
+
   const move = async (episode: Episode, offset: number) => {
     setBusy(true)
     try {

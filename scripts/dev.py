@@ -2,6 +2,15 @@
 
 Runs both FastAPI (port 8001) and Vite (port 5173) in one terminal,
 and cleanly terminates both on Ctrl+C.
+
+    python scripts/dev.py            # for writing: the backend never restarts itself
+    python scripts/dev.py --reload   # for editing backend code
+
+Auto-reload is off by default, on purpose. A generation runs for minutes, and a
+reload kills it partway. Worse, on Windows a reload can hang outright: uvicorn
+logs "Reloading..." and the old process never exits, so the server keeps
+serving stale code — or, once it does go, nothing comes back up. Neither is
+something an author should meet in the middle of a chapter.
 """
 
 from __future__ import annotations
@@ -24,17 +33,40 @@ else:
     UVICORN_CMD = [str(VENV_UVICORN)]
 
 
+def _wait_for_backend(timeout: float) -> bool:
+    """Poll /api/health until the backend answers, or the timeout passes."""
+    import urllib.request
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:8001/api/health", timeout=2):
+                return True
+        except OSError:
+            time.sleep(1)
+    return False
+
+
 def main() -> None:
     print("\n========================================================")
     print("🚀 Starting StoryWeaver (FastAPI + Vite React TS)")
     print("========================================================\n")
 
+    # `--app-dir backend` makes the import work even without an editable
+    # install, which is what broke when `src/` was renamed.
     backend_cmd = UVICORN_CMD + [
         "storyweaver.server:app",
-        "--reload",
+        "--app-dir",
+        "backend",
         "--port",
         "8001",
     ]
+    if "--reload" in sys.argv[1:]:
+        # Opt-in, for backend work. Watching only the backend package keeps an
+        # edit to a test, a script or the frontend from restarting the server.
+        backend_cmd += ["--reload", "--reload-dir", "backend"]
+        print("⚠ Auto-reload is ON: saving a backend file restarts the server and")
+        print("  interrupts any generation in progress (it resumes from its checkpoint).\n")
 
     frontend_cmd = ["npm", "run", "dev"]
 
@@ -58,7 +90,14 @@ def main() -> None:
         shell=is_win,
     )
 
-    print("\n✅ Both servers are running!")
+    # The backend loads ChromaDB before it answers anything — about 10–20 s. A
+    # generation started before then is refused, so say "ready" only once it is.
+    print("⏳ Waiting for the backend to load memory (ChromaDB)...")
+    ready = _wait_for_backend(timeout=90)
+    if ready:
+        print("\n✅ Both servers are running!")
+    else:
+        print("\n⚠ The backend did not answer within 90 s — check the log above.")
     print("👉 Open your browser at: http://localhost:5173")
     print("👉 Backend API docs at:  http://localhost:8001/docs\n")
     print("Press Ctrl+C to stop both servers.\n")

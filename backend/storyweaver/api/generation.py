@@ -1,9 +1,17 @@
 """Live episode generation, streamed to the browser over Server-Sent Events.
 
-The pipeline is synchronous and long-running, so it runs on a worker thread and
-reports through a queue. The request thread does nothing but drain that queue,
-which keeps the event loop free and lets a browser watch a ten-minute
-generation without a single poll.
+A generation is a *job*, and the stream is only a window onto it.
+
+The pipeline is synchronous and long-running, so each run is a worker thread
+that owns its own outcome: it saves the finished chapter, puts a failed one back
+in the queue, and records what it spent — all by itself. The SSE stream merely
+relays progress while someone is watching.
+
+That separation is the whole point. A browser tab closes, a laptop sleeps, a
+proxy drops an idle connection, the author clicks "stop watching" — none of
+those may cost a chapter that is minutes into being written. Earlier the
+bookkeeping lived in the stream, so the moment the stream closed a finished
+chapter was never saved, and its status stayed "in progress" forever.
 """
 
 from __future__ import annotations
@@ -13,6 +21,7 @@ import logging
 import queue
 import threading
 from collections.abc import Iterator
+from dataclasses import dataclass, field
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -91,20 +100,13 @@ def running_generations() -> list[int]:
         return sorted(_running)
 
 
-@router.get("/stream/{episode_number}")
-def stream_generation(
-    episode_number: int,
-    max_turns: int = Query(default=12, ge=2, le=40),
-) -> EventSourceResponse:
-    """Generate one episode, reporting each pipeline stage as it finishes.
+def _check_startable(project: Project, episode_number: int) -> None:
+    """Everything that would stop a generation from starting, as an HTTP error.
 
-    Events, in order: "start" once the run begins, "progress" after every
-    pipeline node, and then either "complete" with the saved chapter or
-    "error" saying whether a checkpoint survived the failure.
+    Shared by the stream and by `/check`, so the two can never disagree about
+    whether an episode is ready.
     """
-    project = deps.get_project()
     episode = deps.require_episode(project, episode_number)
-
     if not project.world.overview.strip():
         raise HTTPException(status_code=409, detail="This story has no world yet")
     if not project.characters:
@@ -114,6 +116,50 @@ def stream_generation(
             status_code=409, detail="This episode has no storyline to work from"
         )
 
+
+@router.get("/check/{episode_number}")
+def check_generation(
+    episode_number: int,
+    max_turns: int = Query(default=12, ge=2, le=40),
+) -> dict:
+    """Would `/stream` start this episode? Answers without starting anything.
+
+    The browser's EventSource cannot read the body of a refused request — it
+    only learns that the connection failed, and has to guess why. Asking here
+    first, with an ordinary request, is how the author gets the real reason:
+    the same validation, the same status codes, the same message.
+    """
+    _check_startable(deps.get_project(), episode_number)
+    with _running_lock:
+        if episode_number in _running:
+            raise HTTPException(
+                status_code=409, detail=f"Episode {episode_number} is already generating"
+            )
+    checkpoint = deps.get_checkpoints().load(episode_number)
+    return {
+        "episode_number": episode_number,
+        "max_turns": max_turns,
+        "resumable": checkpoint is not None,
+        "scenes_completed": checkpoint.scenes_completed if checkpoint else 0,
+    }
+
+
+@router.get("/stream/{episode_number}")
+def stream_generation(
+    episode_number: int,
+    max_turns: int = Query(default=12, ge=2, le=40),
+) -> EventSourceResponse:
+    """Start generating one episode, and watch it.
+
+    The job starts here, in the request handler, before any event is streamed —
+    so it runs to the end and saves its result whether or not anyone stays to
+    watch. Events, in order: "start", then "progress" after every pipeline node,
+    then either "complete" with the saved chapter or "error" saying whether a
+    checkpoint survived the failure.
+    """
+    project = deps.get_project()
+    _check_startable(project, episode_number)
+
     with _running_lock:
         if episode_number in _running:
             raise HTTPException(
@@ -121,29 +167,44 @@ def stream_generation(
             )
         _running.add(episode_number)
 
-    return EventSourceResponse(
-        iterate_in_threadpool(_run(project, episode_number, max_turns))
-    )
+    try:
+        job = _start_job(project, episode_number, max_turns)
+    except BaseException:
+        with _running_lock:
+            _running.discard(episode_number)
+        raise
+
+    return EventSourceResponse(iterate_in_threadpool(_relay(job)))
 
 
 def _event(name: str, payload: dict[str, Any]) -> dict[str, str]:
     return {"event": name, "data": json.dumps(payload, ensure_ascii=False)}
 
 
-def _run(project: Project, episode_number: int, max_turns: int) -> Iterator[dict[str, str]]:
-    """Drive one generation, yielding SSE frames as the worker reports in."""
-    try:
-        yield from _drive(project, episode_number, max_turns)
-    finally:
-        with _running_lock:
-            _running.discard(episode_number)
+# ==========================================================================
+# The job
+# ==========================================================================
 
 
-def _drive(project: Project, episode_number: int, max_turns: int) -> Iterator[dict[str, str]]:
+@dataclass
+class _Job:
+    episode_number: int
+    max_turns: int
+    names: dict[str, str]
+    start: dict[str, Any]
+    memory_available: bool
+    events: queue.Queue = field(default_factory=queue.Queue)
+    outcome: dict[str, Any] = field(default_factory=dict)
+    # Cleared when the watcher goes away, so a job nobody is watching stops
+    # queueing progress frames that would only pile up in memory.
+    watching: threading.Event = field(default_factory=threading.Event)
+    thread: threading.Thread | None = None
+
+
+def _start_job(project: Project, episode_number: int, max_turns: int) -> _Job:
     episode = deps.require_episode(project, episode_number)
     checkpoints = deps.get_checkpoints()
     memory = deps.get_memory()
-    progress = GenerationProgress(episode_number=episode_number)
 
     # Regenerating a finished chapter starts over rather than resuming into
     # scenes that belong to the version being replaced.
@@ -160,29 +221,30 @@ def _drive(project: Project, episode_number: int, max_turns: int) -> Iterator[di
     project.update_episode(episode.model_copy(update={"status": "in_progress"}))
     deps.save_project(project)
 
-    yield _event(
-        "start",
-        {
+    job = _Job(
+        episode_number=episode_number,
+        max_turns=max_turns,
+        names={character.id: character.name for character in project.characters},
+        start={
             "episode_number": episode_number,
             "title": episode.title,
             "resuming_from_scene": resuming,
             "memory_available": memory is not None,
         },
+        memory_available=memory is not None,
     )
-
-    names = {character.id: character.name for character in project.characters}
-    events: queue.Queue = queue.Queue()
-    outcome: dict[str, Any] = {}
+    job.watching.set()
 
     def on_event(node: str, state: dict[str, Any]) -> None:
-        events.put((node, state))
+        if job.watching.is_set():
+            job.events.put((node, state))
 
     def work() -> None:
         try:
             with telemetry.record_usage(f"episode {episode_number}") as usage:
                 # Published before the run starts: `total_tokens` is computed
                 # live, so a progress frame can quote the spend so far.
-                outcome["usage"] = usage
+                job.outcome["usage"] = usage
                 try:
                     done, final = episode_runner.run_episode(
                         episode,
@@ -193,52 +255,107 @@ def _drive(project: Project, episode_number: int, max_turns: int) -> Iterator[di
                         memory=memory,
                         checkpoints=checkpoints,
                         on_event=on_event,
+                        # Kept until the chapter is saved below: until then the
+                        # checkpoint is the only copy of the prose on disk.
+                        clear_checkpoint=False,
                     )
                 except Exception as error:  # noqa: BLE001 — reported to the client
                     logger.exception("Episode %d failed", episode_number)
-                    outcome["error"] = error
+                    job.outcome["error"] = error
                 else:
-                    outcome["episode"] = done
-                    outcome["final"] = final
+                    job.outcome["episode"] = done
+                    job.outcome["final"] = final
+            _settle(job, checkpoints)
+        except Exception:  # noqa: BLE001 — never let the job die without a word
+            logger.exception("Episode %d: could not settle the result", episode_number)
         finally:
-            events.put(_SENTINEL)
+            with _running_lock:
+                _running.discard(episode_number)
+            job.events.put(_SENTINEL)
 
-    worker = threading.Thread(target=work, name=f"generate-{episode_number}", daemon=True)
-    worker.start()
+    job.thread = threading.Thread(target=work, name=f"generate-{episode_number}", daemon=True)
+    job.thread.start()
+    return job
 
-    while True:
-        item = events.get()
-        if item is _SENTINEL:
-            break
-        node, state = item
-        progress.update(node, state)
-        usage = outcome.get("usage")
-        yield _event(
-            "progress",
-            {
-                "node": node,
-                "stage": _STAGES.get(node, ""),
-                "current_scene": progress.current_scene,
-                "total_scenes": progress.scene_count,
-                "label": progress.current_label(),
-                "summary": progress.events[-1].text if progress.events else "",
-                "fraction": progress.fraction(),
-                "checklist": progress.lines(),
-                "scene": _scene_detail(state, names),
-                "turns": len(state.get("current_entries", [])),
-                "max_turns": max_turns,
-                "retry_count": int(state.get("retry_count", 0)),
-                "tokens": usage.total_tokens if usage else 0,
-                "calls": usage.calls if usage else 0,
-            },
-        )
 
-    worker.join()
-    usage = outcome.get("usage")
+def _settle(job: _Job, checkpoints) -> None:
+    """Persist a finished run. Runs on the worker, watched or not."""
+    number = job.episode_number
+    usage = job.outcome.get("usage")
     if usage is not None:
         # Recorded whether the run succeeded or failed: a failed run still
         # spent what it spent.
-        telemetry_log.record_run(episode_number, usage)
+        telemetry_log.record_run(number, usage)
+
+    with deps.write_lock():
+        # Reloaded rather than reused: the run took minutes, and the author may
+        # have edited the queue in the meantime.
+        current = deps.get_project()
+        latest = current.get_episode(number)
+
+        if "error" in job.outcome:
+            # Back in the queue, so the author can simply generate it again —
+            # it resumes from the checkpoint rather than starting over.
+            if latest is not None:
+                current.update_episode(latest.model_copy(update={"status": "queued"}))
+                deps.save_project(current)
+            return
+
+        current.update_episode(job.outcome["episode"])
+        deps.save_project(current)
+
+    # Only now is the chapter safely on disk, so only now may the checkpoint go.
+    checkpoints.clear(number)
+    job.outcome["saved"] = True
+
+
+# ==========================================================================
+# The window onto it
+# ==========================================================================
+
+
+def _relay(job: _Job) -> Iterator[dict[str, str]]:
+    """Stream a job's progress. Closing this stream does not stop the job."""
+    progress = GenerationProgress(episode_number=job.episode_number)
+    try:
+        yield _event("start", job.start)
+
+        while True:
+            item = job.events.get()
+            if item is _SENTINEL:
+                break
+            node, state = item
+            progress.update(node, state)
+            usage = job.outcome.get("usage")
+            yield _event(
+                "progress",
+                {
+                    "node": node,
+                    "stage": _STAGES.get(node, ""),
+                    "current_scene": progress.current_scene,
+                    "total_scenes": progress.scene_count,
+                    "label": progress.current_label(),
+                    "summary": progress.events[-1].text if progress.events else "",
+                    "fraction": progress.fraction(),
+                    "checklist": progress.lines(),
+                    "scene": _scene_detail(state, job.names),
+                    "turns": len(state.get("current_entries", [])),
+                    "max_turns": job.max_turns,
+                    "retry_count": int(state.get("retry_count", 0)),
+                    "tokens": usage.total_tokens if usage else 0,
+                    "calls": usage.calls if usage else 0,
+                },
+            )
+
+        yield _final_event(job, progress)
+    finally:
+        # The watcher has gone — finished, or walked away. The job carries on
+        # regardless; it just stops queueing frames nobody will read.
+        job.watching.clear()
+
+
+def _final_event(job: _Job, progress: GenerationProgress) -> dict[str, str]:
+    usage = job.outcome.get("usage")
     cost = (
         {
             "calls": usage.calls,
@@ -249,20 +366,15 @@ def _drive(project: Project, episode_number: int, max_turns: int) -> Iterator[di
         else None
     )
 
-    if "error" in outcome:
-        error = outcome["error"]
-        # The project was left mid-flight; put it back in the queue so the
-        # author can simply generate it again.
-        current = deps.get_project()
-        stalled = current.get_episode(episode_number)
-        if stalled is not None:
-            current.update_episode(stalled.model_copy(update={"status": "queued"}))
-            deps.save_project(current)
-        checkpoint = checkpoints.load(episode_number)
-        yield _event(
+    if "error" in job.outcome or not job.outcome.get("saved"):
+        error = job.outcome.get("error") or RuntimeError(
+            "The chapter was written but could not be saved"
+        )
+        checkpoint = deps.get_checkpoints().load(job.episode_number)
+        return _event(
             "error",
             {
-                "episode_number": episode_number,
+                "episode_number": job.episode_number,
                 "message": str(error),
                 "type": type(error).__name__,
                 "resumable": checkpoint is not None,
@@ -270,20 +382,14 @@ def _drive(project: Project, episode_number: int, max_turns: int) -> Iterator[di
                 "usage": cost,
             },
         )
-        return
 
-    done = outcome["episode"]
-    final = outcome.get("final", {})
-    recorded = memory is not None and "episode_memory" in final
+    done = job.outcome["episode"]
+    final = job.outcome.get("final", {})
+    recorded = job.memory_available and "episode_memory" in final
     if recorded:
         progress.note_recorded()
 
-    # Reload before saving: the queue may have moved on while this ran.
-    current = deps.get_project()
-    current.update_episode(done)
-    deps.save_project(current)
-
-    yield _event(
+    return _event(
         "complete",
         {
             "episode": done.model_dump(),
@@ -294,3 +400,27 @@ def _drive(project: Project, episode_number: int, max_turns: int) -> Iterator[di
             "usage": cost,
         },
     )
+
+
+# ==========================================================================
+# Recovery
+# ==========================================================================
+
+
+def recover_interrupted() -> list[int]:
+    """Put back in the queue any episode a dead process left "in progress".
+
+    Called at startup, when by definition nothing is running. A server that
+    was stopped mid-generation — Ctrl+C, a crash, a reload triggered by a file
+    save — leaves its episode marked "in progress" with nothing behind it, and
+    nothing else would ever clear that. Its checkpoint, if any, is kept, so
+    generating it again resumes from the last finished scene.
+    """
+    with deps.write_lock():
+        project = deps.get_project()
+        stranded = [e for e in project.episodes if e.status == "in_progress"]
+        for episode in stranded:
+            project.update_episode(episode.model_copy(update={"status": "queued"}))
+        if stranded:
+            deps.save_project(project)
+    return [e.episode_number for e in stranded]

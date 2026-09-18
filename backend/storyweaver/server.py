@@ -20,7 +20,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from storyweaver import __version__, config
-from storyweaver.api import ROUTERS, deps
+from storyweaver.api import ROUTERS, deps, generation
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,17 @@ async def lifespan(app: FastAPI):
     store = deps.get_store()
     store.data_dir.mkdir(parents=True, exist_ok=True)
     logger.info("StoryWeaver API serving %s", store.data_dir)
+
+    # Nothing can be generating in a process that has only just started, so an
+    # episode still marked "in progress" was stranded by a previous one — a
+    # crash, a Ctrl+C, a reload. Put it back in the queue; its checkpoint, if
+    # any, is kept, so generating it again resumes rather than starts over.
+    recovered = generation.recover_interrupted()
+    if recovered:
+        logger.warning(
+            "Episode(s) %s were left in progress by a previous run; back in the queue",
+            ", ".join(str(n) for n in recovered),
+        )
 
     # Probed once at boot rather than on the first request that needs it:
     # ChromaDB downloads an embedding model the first time, and an author

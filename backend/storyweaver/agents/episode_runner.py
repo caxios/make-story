@@ -311,7 +311,17 @@ def assemble_final_text(
 
     title = episode.title
     if not title and auto_title:
-        title = _generate_title(state, models)
+        try:
+            title = _generate_title(state, models)
+        except Exception:  # noqa: BLE001 — see below
+            # The title is the least important thing in the chapter and the
+            # last thing made: every scene is already written by the time we
+            # get here. Losing all of that to a failed title call is the wrong
+            # trade, so the chapter is saved untitled — the author can name it.
+            logger.exception(
+                "Could not title episode %d; saving it untitled", episode.episode_number
+            )
+            title = ""
 
     body = _weave(state.get("scene_prose_outputs", []), state.get("transitions", []))
     header = f"[Episode {episode.episode_number}"
@@ -391,8 +401,19 @@ def more_scenes(state: EpisodePipelineState) -> str:
 
 
 def entry_point(state: EpisodePipelineState) -> str:
-    """Skip the Director when resuming a run that already has its scenes."""
-    return "resume" if state.get("scenes") else "plan"
+    """Where a run starts: planning, a scene part-way through, or assembly.
+
+    A resumed run skips the Director. And a run that died after its last scene
+    was written — the typical case when the title call fails — has nothing left
+    to simulate at all: sending it to `simulate_scene` would index a scene that
+    does not exist. It goes straight to assembly instead.
+    """
+    scenes = state.get("scenes")
+    if not scenes:
+        return "plan"
+    if state.get("current_scene_index", 0) >= len(scenes):
+        return "assemble"
+    return "resume"
 
 
 # --------------------------------------------------------------------------
@@ -428,7 +449,13 @@ def build_episode_graph(
     # A resumed run arrives with its scenes already planned, so it re-enters at
     # the simulation step rather than paying the Director a second time.
     graph.add_conditional_edges(
-        START, entry_point, {"plan": "director_plan_scenes", "resume": "simulate_scene"}
+        START,
+        entry_point,
+        {
+            "plan": "director_plan_scenes",
+            "resume": "simulate_scene",
+            "assemble": "assemble_episode",
+        },
     )
     graph.add_edge("director_plan_scenes", "simulate_scene")
     graph.add_edge("simulate_scene", "check_lore")
@@ -548,6 +575,7 @@ def run_episode(
     checkpoints: CheckpointStore | None = None,
     resume: bool = True,
     transitions: bool = True,
+    clear_checkpoint: bool = True,
 ) -> tuple[Episode, dict[str, Any]]:
     """Run an episode end to end.
 
@@ -601,8 +629,13 @@ def run_episode(
             on_event(node, state)
 
     done = final["episode"]
-    if checkpoints is not None:
+    if checkpoints is not None and clear_checkpoint:
         # The episode is assembled; the partial record has done its job.
+        #
+        # A caller that persists the chapter itself should pass
+        # `clear_checkpoint=False` and clear it after saving: until the chapter
+        # is on disk, the checkpoint is the only copy of the prose, and the
+        # summarization below is a slow model call that can outlive the process.
         checkpoints.clear(done.episode_number)
 
     if memory is not None and record_memory:
