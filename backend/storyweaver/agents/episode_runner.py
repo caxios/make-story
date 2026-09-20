@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -229,6 +229,8 @@ def write_current_scene(
         # The Writer is shown the previous scene so it can diverge from it.
         previous_prose=written[-1] if written else "",
         pacing=state["episode"].pacing,
+        creativity=state["episode"].creativity,
+        tone_notes=state["episode"].tone_notes,
     )
 
     scenes = list(state["scenes"])
@@ -485,6 +487,7 @@ def stream_episode(
     checkpoints: CheckpointStore | None = None,
     transitions: bool = True,
     resume_from: EpisodeCheckpoint | None = None,
+    plan: Sequence[Scene] | None = None,
 ) -> Iterator[tuple[str, dict[str, Any]]]:
     """Run the pipeline, yielding `(node_name, accumulated_state)` after each node.
 
@@ -498,7 +501,7 @@ def stream_episode(
     app = build_episode_graph(
         models, max_turns_per_scene, auto_title, memory, checkpoints, transitions
     )
-    initial = _initial_state(episode, world, char_map, style, resume_from)
+    initial = _initial_state(episode, world, char_map, style, resume_from, plan)
 
     latest_node: str | None = None
     # Worst case per scene: simulate + (check + rerun) * (MAX_LORE_RETRIES + 1)
@@ -520,14 +523,35 @@ def _validate(episode: Episode, char_map: Mapping[str, CharacterProfile]) -> Non
         raise ValueError("run_episode needs an author_storyline to work from")
 
 
+def _style_for(style: WritingStyle | None, episode: Episode) -> WritingStyle:
+    """The story's style, with this episode's overrides laid over it.
+
+    Resolved once, here, so every stage downstream reads one style and none of
+    them has to know that an override exists.
+    """
+    resolved = style or WritingStyle()
+    if episode.prose_density:
+        resolved = resolved.model_copy(update={"prose_density": episode.prose_density})
+    return resolved
+
+
 def _initial_state(
     episode: Episode,
     world: WorldLore,
     char_map: dict[str, CharacterProfile],
     style: WritingStyle | None,
     resume_from: EpisodeCheckpoint | None = None,
+    plan: Sequence[Scene] | None = None,
 ) -> EpisodePipelineState:
     resumed: dict[str, Any] = {}
+    if plan and resume_from is None:
+        # An approved plan means the Director has already done its job, and the
+        # author has signed off on the result — running it again would throw
+        # away what they approved. `entry_point` sees the scenes and skips it.
+        logger.info(
+            "Episode %d: writing the %d approved scene(s)", episode.episode_number, len(plan)
+        )
+        resumed = {"scenes": list(plan), "current_scene_index": 0}
     if resume_from is not None:
         logger.info(
             "Resuming episode %d from scene %d",
@@ -546,7 +570,7 @@ def _initial_state(
         "world_lore": world,
         "characters": char_map,
         "episode": episode,
-        "writing_style": style or WritingStyle(),
+        "writing_style": _style_for(style, episode),
         "current_scene_index": 0,
         "scenes": [],
         "scene_prose_outputs": [],
@@ -576,6 +600,7 @@ def run_episode(
     resume: bool = True,
     transitions: bool = True,
     clear_checkpoint: bool = True,
+    plan: Sequence[Scene] | None = None,
 ) -> tuple[Episode, dict[str, Any]]:
     """Run an episode end to end.
 
@@ -609,7 +634,9 @@ def run_episode(
             )
             checkpoints.clear(episode.episode_number)
 
-    final: dict[str, Any] = _initial_state(episode, world, char_map, style, resume_from)
+    final: dict[str, Any] = _initial_state(
+        episode, world, char_map, style, resume_from, plan
+    )
     for node, state in stream_episode(
         episode,
         world,
@@ -623,6 +650,7 @@ def run_episode(
         checkpoints=checkpoints,
         transitions=transitions,
         resume_from=resume_from,
+        plan=plan,
     ):
         final = state
         if on_event is not None:

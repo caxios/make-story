@@ -5,14 +5,15 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from storyweaver.models import Episode
-from storyweaver.models.style import PACING
+from storyweaver.agents import director
+from storyweaver.models import Episode, Scene, StoryBeat
+from storyweaver.models.style import PACING, PROSE_DENSITIES
 from storyweaver.api import deps
 from storyweaver.ui.project import Project
 
 router = APIRouter(prefix="/api/episodes", tags=["episodes"])
 
-STATUSES = ("queued", "in_progress", "completed")
+STATUSES = ("queued", "planned", "in_progress", "completed")
 
 
 class NewEpisode(BaseModel):
@@ -32,6 +33,13 @@ class EpisodeUpdate(BaseModel):
     # Editable: the author knows better than the summarizer what the next
     # episode needs to remember, and this is what gets injected into it.
     summary: str | None = None
+    # How this one chapter is written. `null` is not "unset" here — a PUT that
+    # omits these leaves them alone, and `reset_expression` is how an override
+    # is taken back off.
+    creativity: float | None = Field(default=None, ge=0.0, le=1.0)
+    prose_density: str | None = None
+    tone_notes: str | None = None
+    reset_expression: bool = False
 
 
 class MoveRequest(BaseModel):
@@ -47,6 +55,15 @@ def _check_pacing(pacing: str | None) -> None:
     if pacing is not None and pacing not in PACING:
         raise HTTPException(
             status_code=422, detail=f"Unknown pacing {pacing!r}; expected one of {list(PACING)}"
+        )
+
+
+def _check_density(density: str | None) -> None:
+    if density is not None and density not in PROSE_DENSITIES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown prose density {density!r}; expected one of "
+            f"{list(PROSE_DENSITIES)}",
         )
 
 
@@ -96,10 +113,24 @@ def read_episode(episode_number: int, project: Project = Depends(deps.get_projec
 def update_episode(episode_number: int, update: EpisodeUpdate) -> Episode:
     _check_pacing(update.pacing)
     _check_status(update.status)
+    _check_density(update.prose_density)
     with deps.write_lock():
         project = deps.get_project()
         episode = deps.require_episode(project, episode_number)
         changes = update.model_dump(exclude_unset=True, exclude_none=True)
+        if changes.pop("reset_expression", False):
+            # Back to following the project's writing style.
+            changes.update({"creativity": None, "prose_density": None, "tone_notes": ""})
+        storyline = changes.get("author_storyline")
+        if (
+            storyline is not None
+            and storyline.strip() != episode.author_storyline.strip()
+            and episode.status == "planned"
+        ):
+            # The plan was drawn for a different storyline, so it is no longer
+            # the author's plan for this one. Back to the start.
+            changes.setdefault("status", "queued")
+            changes.setdefault("scenes", [])
         edited = episode.model_copy(update=changes)
         project.update_episode(edited)
         deps.save_project(project)
@@ -172,3 +203,153 @@ def summarize_episode(episode_number: int) -> Episode:
         current.update_episode(updated)
         deps.save_project(current)
     return updated
+
+
+# ==========================================================================
+# The plan
+#
+# Between an outline and a chapter sits a decision the author should make, not
+# the model: how this episode is actually laid out. Drafting that costs one
+# Director call — next to nothing — while writing it costs fifty. So the plan
+# is made first, shown, and only written once it is approved.
+# ==========================================================================
+
+
+class PlannedScene(BaseModel):
+    """One scene of a plan, as the author edits it."""
+
+    title: str = Field(min_length=1)
+    objective: str = Field(min_length=1)
+    participating_character_ids: list[str] = Field(min_length=1)
+    location_id: str | None = None
+    beats: list[StoryBeat] = Field(default_factory=list)
+
+
+class PlanUpdate(BaseModel):
+    scenes: list[PlannedScene] = Field(min_length=1)
+
+
+def _plan_response(project: Project, episode: Episode) -> dict:
+    """The plan, with the length budget that says whether it can hit its target."""
+    style = project.style
+    per_scene = style.target_word_count_per_scene
+    count = len(episode.scenes)
+    return {
+        "episode_number": episode.episode_number,
+        "status": episode.status,
+        "scenes": [scene.model_dump() for scene in episode.scenes],
+        "unit": "characters" if style.counts_characters() else "words",
+        "target_per_scene": per_scene,
+        "target_total": per_scene * count,
+        # What a Korean web-novel 회차 is expected to run to, for comparison.
+        "standard_low": 4500,
+        "standard_high": 5500,
+    }
+
+
+@router.post("/{episode_number}/plan")
+def draft_plan(episode_number: int) -> dict:
+    """Have the Director lay the episode out, for the author to approve.
+
+    One model call. Nothing is written, and nothing else in the project moves
+    until the author says so.
+    """
+    project = deps.get_project()
+    episode = deps.require_episode(project, episode_number)
+    if not episode.author_storyline.strip():
+        raise HTTPException(
+            status_code=409, detail="This episode has no storyline to plan from"
+        )
+    if not project.characters:
+        raise HTTPException(status_code=409, detail="This story has no characters yet")
+    if episode.status == "in_progress":
+        raise HTTPException(
+            status_code=409, detail=f"Episode {episode_number} is being written right now"
+        )
+
+    memory = deps.get_memory()
+    memory_context = ""
+    if memory is not None:
+        memory_context = memory.build_director_context(project.character_map(), episode)
+
+    try:
+        scenes = director.decompose_episode(
+            episode,
+            project.world,
+            project.character_map(),
+            memory_context=memory_context,
+        )
+    except Exception as error:  # noqa: BLE001 — reported to the author
+        raise HTTPException(
+            status_code=502, detail=f"The Director failed: {error}"
+        ) from error
+
+    if not scenes:
+        raise HTTPException(
+            status_code=502,
+            detail="The Director produced no usable scenes. Try again, or name the "
+            "characters in the outline the way they are spelled in the cast.",
+        )
+
+    with deps.write_lock():
+        current = deps.get_project()
+        latest = deps.require_episode(current, episode_number)
+        planned = latest.model_copy(update={"scenes": scenes, "status": "planned"})
+        current.update_episode(planned)
+        deps.save_project(current)
+    return _plan_response(current, planned)
+
+
+@router.get("/{episode_number}/plan")
+def read_plan(episode_number: int, project: Project = Depends(deps.get_project)) -> dict:
+    return _plan_response(project, deps.require_episode(project, episode_number))
+
+
+@router.put("/{episode_number}/plan")
+def update_plan(episode_number: int, update: PlanUpdate) -> dict:
+    """Replace the plan with the author's edit of it.
+
+    Ids are checked here rather than at writing time: an unknown character id
+    would be silently dropped deep inside a simulation, and the author would
+    only find out from a scene that is missing someone.
+    """
+    project = deps.get_project()
+    episode = deps.require_episode(project, episode_number)
+
+    known_characters = set(project.character_map())
+    known_locations = {location.id for location in project.world.locations}
+    scenes = []
+    for number, planned in enumerate(update.scenes, start=1):
+        unknown = [
+            cid for cid in planned.participating_character_ids if cid not in known_characters
+        ]
+        if unknown:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Scene {number} names characters who are not in the cast: "
+                + ", ".join(unknown),
+            )
+        if planned.location_id is not None and planned.location_id not in known_locations:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Scene {number} names a location that is not in the world: "
+                f"{planned.location_id}",
+            )
+        scenes.append(
+            Scene(
+                scene_number=number,
+                title=planned.title,
+                objective=planned.objective,
+                participating_character_ids=planned.participating_character_ids,
+                location_id=planned.location_id,
+                beats=planned.beats,
+            )
+        )
+
+    with deps.write_lock():
+        current = deps.get_project()
+        latest = deps.require_episode(current, episode_number)
+        edited = latest.model_copy(update={"scenes": scenes, "status": "planned"})
+        current.update_episode(edited)
+        deps.save_project(current)
+    return _plan_response(current, edited)

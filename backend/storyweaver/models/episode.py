@@ -57,5 +57,16 @@ class Episode(BaseModel):
     scenes: list[Scene] = Field(default_factory=list)  # populated by Director Agent
     final_text: str = ""            # assembled prose from all scenes
     summary: str = ""               # generated after completion for memory
-    status: str = "queued"          # queued | in_progress | completed
+    # queued -> planned (the Director has drafted scenes, awaiting the
+    # author) -> in_progress -> completed.
+    status: str = "queued"
     pacing: str = "normal"          # slow (introspective) | normal | fast (action-heavy)
+
+    # --- How this one chapter is written -----------------------------------
+    # Per-episode overrides of the story-wide writing style. `None` means "use
+    # the project's setting"; a value here applies to this chapter alone, so a
+    # quiet interlude and a climax need not be written at the same pitch.
+    creativity: float | None = Field(default=None, ge=0.0, le=1.0)
+    prose_density: str | None = None    # "sparse" | "moderate" | "lush"
+    # The mood of this chapter in the author's own words, quoted to the Writer.
+    tone_notes: str = ""

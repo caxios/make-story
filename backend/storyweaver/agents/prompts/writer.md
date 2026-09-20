@@ -47,6 +47,7 @@ Rules of this world that always hold:
 10. The prose should read as a complete, self-contained section of a novel, with
     a natural opening and closing. Do not end on a summary or a moral.
 11. Pacing: {pacing}
+11a. LATITUDE — how much freedom this chapter's prose has: {latitude}
 12. VARY YOUR PROSE. Do not start consecutive paragraphs the same way, and do not
     reuse the sentence shapes, rhythms, or images of the previous scene shown
     above — read it and consciously diverge. Alternate between action beats,
@@ -73,6 +74,9 @@ that feels thin is usually missing one of them entirely:
 - **Dialogue that is really a negotiation.** Let exchanges breathe — an
   interruption, a silence held a moment too long, a question answered sideways.
   Two characters who already agree have nothing to say.
+
+## The Mood Of This Particular Chapter
+{tone_notes}
 
 ## Author's Style Notes
 {style_notes}

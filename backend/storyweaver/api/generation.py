@@ -211,6 +211,12 @@ def _start_job(project: Project, episode_number: int, max_turns: int) -> _Job:
     if episode.status == "completed":
         checkpoints.clear(episode_number)
 
+    # An approved plan is used as it stands. A checkpoint outranks it: that run
+    # is already past planning, and its scenes carry prose.
+    approved_plan = (
+        list(episode.scenes) if episode.status == "planned" and episode.scenes else None
+    )
+
     resumable = checkpoints.load(episode_number)
     resuming = (
         resumable.current_scene_index + 1
@@ -258,6 +264,9 @@ def _start_job(project: Project, episode_number: int, max_turns: int) -> _Job:
                         # Kept until the chapter is saved below: until then the
                         # checkpoint is the only copy of the prose on disk.
                         clear_checkpoint=False,
+                        # Scenes the author approved are written as approved;
+                        # only an unplanned episode gets the Director.
+                        plan=approved_plan,
                     )
                 except Exception as error:  # noqa: BLE001 — reported to the client
                     logger.exception("Episode %d failed", episode_number)

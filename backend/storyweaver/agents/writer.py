@@ -22,11 +22,12 @@ from storyweaver.models import (
     WorldLore,
     WritingStyle,
 )
-from storyweaver.models.style import describe_pacing
+from storyweaver.models.style import describe_creativity, describe_pacing, temperature_for
 
 logger = logging.getLogger(__name__)
 
 NO_MEMORY = "(no earlier episodes to carry forward)"
+NO_TONE = "(nothing set for this chapter — follow the story's tone)"
 
 # ---------------------------------------------------------------------------
 # Patterns that catch API metadata leaked into the model's text output.
@@ -178,6 +179,8 @@ def build_prompt(
     memory_context: str = "",
     previous_prose: str = "",
     pacing: str = "normal",
+    creativity: float | None = None,
+    tone_notes: str = "",
 ) -> str:
     """Render the Writer prompt for one scene."""
     style = style or WritingStyle()
@@ -198,6 +201,8 @@ def build_prompt(
         memory_context=memory_context or NO_MEMORY,
         previous_prose=(previous_prose[-PREVIOUS_PROSE_CHARS:] if previous_prose else NO_PREVIOUS),
         pacing=describe_pacing(pacing),
+        latitude=describe_creativity(creativity),
+        tone_notes=tone_notes.strip() or NO_TONE,
         genre=world.genre,
         tone=world.tone,
         location=location,
@@ -230,6 +235,8 @@ def write_scene(
     memory_context: str = "",
     previous_prose: str = "",
     pacing: str = "normal",
+    creativity: float | None = None,
+    tone_notes: str = "",
 ) -> str:
     """Write one scene as prose.
 
@@ -242,9 +249,24 @@ def write_scene(
         raise ValueError(f"Scene {scene.scene_number} has an empty interaction log")
 
     prompt = build_prompt(
-        scene, world, characters, entries, style, memory_context, previous_prose, pacing
+        scene,
+        world,
+        characters,
+        entries,
+        style,
+        memory_context,
+        previous_prose,
+        pacing,
+        creativity,
+        tone_notes,
     )
-    model = telemetry.meter(llm or get_llm(stage="writer"), "writer")
+    # The instruction says how far the prose may go; the temperature decides how
+    # far it does. Setting one without the other gets a model told to be daring
+    # that samples timidly, or told to be plain that reaches for a metaphor.
+    model = telemetry.meter(
+        llm or get_llm(stage="writer", temperature=temperature_for(creativity)),
+        "writer",
+    )
     result = model.invoke(prompt)
     prose = getattr(result, "content", result)
     return _clean_prose(str(prose))

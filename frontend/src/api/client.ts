@@ -12,6 +12,7 @@ import type {
   CharacterMemoryState,
   CharacterProfile,
   Episode,
+  EpisodePlan,
   Health,
   Location,
   LocationTreeRow,
@@ -19,6 +20,7 @@ import type {
   MemoryStatus,
   Pacing,
   PendingGeneration,
+  ProseDensity,
   PlotThreads,
   Project,
   ProjectStats,
@@ -208,6 +210,12 @@ export interface EpisodeUpdate {
   status?: Episode['status']
   final_text?: string
   summary?: string
+  /** How this chapter is written; omit to leave as it is. */
+  creativity?: number
+  prose_density?: ProseDensity
+  tone_notes?: string
+  /** Put this chapter back on the project's writing style. */
+  reset_expression?: boolean
 }
 
 export const getEpisodes = () => request<Episode[]>('/api/episodes')
@@ -244,6 +252,32 @@ export const addEpisodesBatch = (text: string, separator = '---') =>
  * editing prose by hand, because the summary is what the next episode is told
  * about this one.
  */
+/**
+ * Have the Director lay the episode out, for the author to approve.
+ *
+ * One model call, and nothing is written — which is the point: the layout is
+ * cheap to look at and expensive to get wrong.
+ */
+export const draftPlan = (episodeNumber: number) =>
+  request<EpisodePlan>(`/api/episodes/${episodeNumber}/plan`, { method: 'POST' })
+
+export const getPlan = (episodeNumber: number) =>
+  request<EpisodePlan>(`/api/episodes/${episodeNumber}/plan`)
+
+export interface PlannedSceneInput {
+  title: string
+  objective: string
+  participating_character_ids: string[]
+  location_id?: string | null
+  beats?: { description: string }[]
+}
+
+export const savePlan = (episodeNumber: number, scenes: PlannedSceneInput[]) =>
+  request<EpisodePlan>(`/api/episodes/${episodeNumber}/plan`, {
+    method: 'PUT',
+    body: { scenes },
+  })
+
 export const summarizeEpisode = (episodeNumber: number) =>
   request<Episode>(`/api/episodes/${episodeNumber}/summarize`, { method: 'POST' })
 

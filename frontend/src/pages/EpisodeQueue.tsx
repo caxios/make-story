@@ -11,6 +11,7 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
+  ClipboardList,
   FileStack,
   GripVertical,
   ListOrdered,
@@ -26,6 +27,7 @@ import { useNavigate } from 'react-router-dom'
 import * as api from '@/api/client'
 import { useGenerationStream } from '@/api/useGenerationStream'
 import { GenerationOverlay } from '@/components/GenerationOverlay'
+import { PlanReview } from '@/components/PlanReview'
 import { useToast } from '@/components/ToastContext'
 import {
   Badge,
@@ -42,7 +44,7 @@ import {
 } from '@/components/ui'
 import { cn, formatCount } from '@/lib/cn'
 import { useProject } from '@/state/ProjectContext'
-import type { Episode, Pacing, PendingGeneration } from '@/types/storyweaver'
+import type { Episode, EpisodePlan, Pacing, PendingGeneration } from '@/types/storyweaver'
 
 const PACING_OPTIONS: { value: Pacing; label: string }[] = [
   { value: 'slow', label: '느림 (slow) — 심리 묘사 및 차분한 호흡' },
@@ -73,6 +75,10 @@ export function EpisodeQueue() {
   const [busy, setBusy] = useState(false)
   const [maxTurns, setMaxTurns] = useState(12)
   const [pending, setPending] = useState<PendingGeneration[]>([])
+  // The plan under review, and the episode whose plan is being drafted.
+  const [reviewing, setReviewing] = useState<Episode | null>(null)
+  const [plan, setPlan] = useState<EpisodePlan | null>(null)
+  const [planningFor, setPlanningFor] = useState<number | null>(null)
 
   const episodes = useMemo(
     () => [...(project?.episodes ?? [])].sort((a, b) => a.episode_number - b.episode_number),
@@ -170,6 +176,35 @@ export function EpisodeQueue() {
     generation.begin(episode.episode_number, maxTurns)
   }
 
+  /** Draft the layout and open it for review. One model call; nothing written. */
+  const planEpisode = async (episode: Episode) => {
+    setPlanningFor(episode.episode_number)
+    try {
+      const drafted = await api.draftPlan(episode.episode_number)
+      setPlan(drafted)
+      setReviewing(episode)
+      await refresh()
+    } catch (cause) {
+      fromError(cause, '기획서를 만들지 못했습니다.')
+    } finally {
+      setPlanningFor(null)
+    }
+  }
+
+  const reviewPlan = async (episode: Episode) => {
+    try {
+      setPlan(await api.getPlan(episode.episode_number))
+      setReviewing(episode)
+    } catch (cause) {
+      fromError(cause, '기획서를 불러오지 못했습니다.')
+    }
+  }
+
+  const reloadPlan = async (episodeNumber: number) => {
+    setPlan(await api.getPlan(episodeNumber))
+    await refresh()
+  }
+
   if (loading) return <div className="sw-panel h-72 animate-pulse-soft" />
   if (!project) return null
 
@@ -243,6 +278,9 @@ export function EpisodeQueue() {
               onEdit={() => setEditing(episode)}
               onDelete={() => setDeleting(episode)}
               onRequeue={() => void requeue(episode)}
+              planning={planningFor === episode.episode_number}
+              onPlan={() => void planEpisode(episode)}
+              onReviewPlan={() => void reviewPlan(episode)}
               onGenerate={() =>
                 episode.status === 'completed' ? setRegenerating(episode) : generate(episode)
               }
@@ -279,6 +317,26 @@ export function EpisodeQueue() {
       </Panel>
 
       {/* --- Overlays --- */}
+
+      <PlanReview
+        open={reviewing !== null}
+        // Re-read from the queue, so a save elsewhere is reflected here.
+        episode={
+          episodes.find((e) => e.episode_number === reviewing?.episode_number) ?? reviewing
+        }
+        episodeNumber={reviewing?.episode_number ?? 0}
+        episodeTitle={reviewing?.title ?? ''}
+        plan={plan}
+        characters={project.characters}
+        locations={project.world.locations}
+        onClose={() => setReviewing(null)}
+        onChanged={() => reloadPlan(reviewing?.episode_number ?? 0)}
+        onApprove={() => {
+          const approved = reviewing
+          setReviewing(null)
+          if (approved) generate(approved)
+        }}
+      />
 
       <GenerationOverlay
         generation={generation}
@@ -357,12 +415,14 @@ export function EpisodeQueue() {
 
 const STATUS_TONE = {
   queued: 'violet',
+  planned: 'accent',
   in_progress: 'warn',
   completed: 'good',
 } as const
 
 const STATUS_LABELS = {
   queued: '대기 중',
+  planned: '기획서 검토 대기',
   in_progress: '집필 중',
   completed: '완료',
 } as const
@@ -377,12 +437,15 @@ function EpisodeCard({
   isDropTarget,
   resumable,
   generating,
+  planning,
   onToggle,
   onMove,
   onEdit,
   onDelete,
   onRequeue,
   onGenerate,
+  onPlan,
+  onReviewPlan,
   onDragStart,
   onDragOver,
   onDrop,
@@ -397,18 +460,22 @@ function EpisodeCard({
   isDropTarget: boolean
   resumable: boolean
   generating: boolean
+  planning: boolean
   onToggle: () => void
   onMove: (offset: number) => void
   onEdit: () => void
   onDelete: () => void
   onRequeue: () => void
   onGenerate: () => void
+  onPlan: () => void
+  onReviewPlan: () => void
   onDragStart: () => void
   onDragOver: () => void
   onDrop: () => void
   onDragEnd: () => void
 }) {
   const completed = episode.status === 'completed'
+  const planned = episode.status === 'planned'
   const count = words(episode.final_text)
 
   return (
@@ -525,16 +592,29 @@ function EpisodeCard({
             <IconButton icon={RotateCcw} title="대기열로 되돌리기" onClick={onRequeue} />
           )}
           <IconButton icon={Trash2} title="삭제" onClick={onDelete} />
-          <Button
-            size="sm"
-            variant={completed ? 'secondary' : 'primary'}
-            icon={Sparkles}
-            className="ml-1"
-            loading={generating}
-            onClick={onGenerate}
-          >
-            {completed ? '다시 생성' : '집필 시작'}
-          </Button>
+          {/* Queued -> plan it; planned -> read the plan; written -> start over. */}
+          {planned ? (
+            <Button
+              size="sm"
+              variant="primary"
+              icon={ClipboardList}
+              className="ml-1"
+              onClick={onReviewPlan}
+            >
+              기획서 검토
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant={completed ? 'secondary' : 'primary'}
+              icon={completed ? Sparkles : ClipboardList}
+              className="ml-1"
+              loading={generating || planning}
+              onClick={completed ? onGenerate : onPlan}
+            >
+              {completed ? '다시 생성' : '기획서 만들기'}
+            </Button>
+          )}
         </div>
       </div>
     </div>

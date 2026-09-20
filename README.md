@@ -24,35 +24,30 @@ python -m venv .venv
 pip install -e ".[dev]"
 
 cp .env.example .env               # then paste your Gemini API key in
-streamlit run src/storyweaver/ui/app.py
+cd frontend && npm install && cd ..
+
+python scripts/dev.py              # backend on :8001, the studio on :5173
 ```
 
-Get a key at <https://aistudio.google.com/apikey>.
+Get a key at <https://aistudio.google.com/apikey>. Wait for `✅ Both servers are
+running!` — the backend loads its memory store first, and a generation started
+before that is refused.
 
-In the app, open **⚙️ Settings → Project → Start over** and load a bundled story
-— the small sample, or the 10-episode Wizarding World — then go to **📝 Episode
-Queue** and press Generate.
+Open <http://localhost:5173>, write an outline in **📝 에피소드 큐**, press
+**기획서 만들기**, check the layout, and approve it.
 
-### The HTTP API
+`python scripts/dev.py --reload` restarts the backend when you edit it. It is
+off by default because a restart interrupts whatever is being written.
 
-The same core is also served over REST, for a browser front end:
+### The HTTP API on its own
 
 ```bash
-uvicorn storyweaver.server:app --reload --port 8000
+uvicorn storyweaver.server:app --app-dir backend --port 8001
 ```
 
-Interactive docs at <http://localhost:8000/docs>. It reads and writes the same
-`data/` directory as the Streamlit app, so the two stay in step. Generation
-streams over Server-Sent Events at `GET /api/generation/stream/{episode}`.
-
-### The web app
-
-```bash
-cd frontend && npm install && npm run dev     # with the API running above
-```
-
-A Vite + React + TypeScript studio at <http://localhost:5173>, proxying `/api`
-to port 8000.
+Interactive docs at <http://localhost:8001/docs>. Generation streams over
+Server-Sent Events at `GET /api/generation/stream/{episode}`; the run itself is
+a job that saves its own result, so closing the stream never costs a chapter.
 
 ---
 
@@ -60,7 +55,7 @@ to port 8000.
 
 | | |
 |---|---|
-| **Director** | Breaks your outline into 3–4 scenes, keeping every beat you wrote and inventing the connective tissue between them |
+| **Director** | Breaks your outline into 3–4 scenes, keeping every beat you wrote and inventing the connective tissue between them. You approve the plan — scenes, objectives, cast, length budget — before anything is written |
 | **Character agents** | One shared model, a different prompt per character: their traits, voice, goals, secrets, and what *they* personally remember |
 | **Lore Checker** | Validates every scene against your world's rules and the characters' own definitions; re-runs the offending turns with a correction injected |
 | **Writer** | Turns the interaction log into prose, in your perspective, density, pacing and language |
@@ -112,7 +107,7 @@ Generation reports real progress, driven by the pipeline itself:
 ## Command line
 
 ```bash
-pytest                                        # 383 tests, no API key and no network (enforced, not assumed)
+pytest                                        # 422 tests, no API key and no network (enforced, not assumed)
 python -m storyweaver.smoke_test              # is the model binding working?
 python -m storyweaver.demo_scene --two        # one scene, printed
 python -m storyweaver.demo_episode --memory   # one episode, with continuity
@@ -128,7 +123,7 @@ end.
 ## Layout
 
 ```
-src/storyweaver/
+backend/storyweaver/
   config.py          settings from .env
   llm.py             model factory: per-stage temperature, retries
   resilience.py      retry, backoff, output repair
@@ -143,7 +138,8 @@ src/storyweaver/
                      episode_runner, checkpoint, prompts/
   memory/            manager, vector_store, structured_store, plot_tracker,
                      summarizer
-  ui/                Streamlit workbench (app.py, pages/, project.py, progress.py)
+  ui/                project.py and progress.py (no Streamlit), plus the old
+                     Streamlit workbench
 frontend/            Vite + React + TypeScript studio
   src/types/         the domain, mirrored from the Pydantic models
   src/api/           typed REST client and the generation stream hook

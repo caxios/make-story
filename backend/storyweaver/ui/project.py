@@ -34,6 +34,8 @@ STATE_DIRNAME = "state"
 CHROMA_DIRNAME = "chromadb"
 
 QUEUED = "queued"
+# The Director has drafted the scenes; the author has not approved them yet.
+PLANNED = "planned"
 IN_PROGRESS = "in_progress"
 COMPLETED = "completed"
 
@@ -79,8 +81,10 @@ class Project(BaseModel):
         return [e for e in self.episodes if e.status == COMPLETED]
 
     def next_queued_episode(self) -> Episode | None:
-        """The next episode to generate: the first one still queued."""
-        return next((e for e in self.episodes if e.status == QUEUED), None)
+        """The next episode to work on: the first one not yet written."""
+        return next(
+            (e for e in self.episodes if e.status in (QUEUED, PLANNED)), None
+        )
 
     def next_episode_number(self) -> int:
         return max((e.episode_number for e in self.episodes), default=0) + 1
@@ -90,7 +94,10 @@ class Project(BaseModel):
         return ProjectStats(
             episodes_total=len(self.episodes),
             episodes_completed=len(completed),
-            episodes_queued=sum(1 for e in self.episodes if e.status == QUEUED),
+            # Planned counts as queued: both mean "written outline, no prose".
+            episodes_queued=sum(
+                1 for e in self.episodes if e.status in (QUEUED, PLANNED)
+            ),
             total_words=sum(len(e.final_text.split()) for e in completed),
             character_count=len(self.characters),
             open_thread_count=open_thread_count,

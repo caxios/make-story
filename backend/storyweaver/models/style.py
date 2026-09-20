@@ -56,6 +56,77 @@ def describe_pacing(pacing: str) -> str:
     return PACING.get(pacing, pacing)
 
 
+# ---------------------------------------------------------------------------
+# Creativity: how much latitude the prose has, per episode
+#
+# Two things move together here, and both matter. The instruction tells the
+# model how far it may go; the temperature decides how far it actually goes.
+# Setting one without the other produces a model that is told to be daring and
+# samples timidly, or told to be plain and reaches for a metaphor anyway.
+# ---------------------------------------------------------------------------
+
+DEFAULT_CREATIVITY = 0.5
+
+# What each end of the dial asks for, in the Writer's own terms.
+CREATIVITY_LEVELS: list[tuple[float, str]] = [
+    (
+        0.2,
+        "Restrained. Plain, concrete sentences; say what happens and little "
+        "more. No extended metaphor, no flourishes, no invented detail beyond "
+        "what the log and the world already establish. When in doubt, cut.",
+    ),
+    (
+        0.4,
+        "Measured. Clear prose with description where the scene needs it. "
+        "Imagery is allowed but should stay close to the literal.",
+    ),
+    (
+        0.6,
+        "Balanced. Write it as a working novelist would: sensory detail, "
+        "figurative language where it earns its place, a voice of its own — "
+        "without reaching for effect.",
+    ),
+    (
+        0.8,
+        "Expressive. Lean into voice, rhythm and imagery. Invent the texture "
+        "of the moment freely — how the light falls, what the silence sounds "
+        "like — as long as every event in the log still happens.",
+    ),
+    (
+        1.0,
+        "Unrestrained. Take real risks with language: unusual images, unusual "
+        "sentence shapes, the surprising word over the expected one. Nothing "
+        "in the log or the world rules may change, but everything in how it is "
+        "told is yours.",
+    ),
+]
+
+# The sampling temperature at each end. Below 0.5 the prose turns wooden and
+# repetitive; above 1.1 it starts losing the thread of the scene.
+MIN_TEMPERATURE = 0.5
+MAX_TEMPERATURE = 1.1
+
+
+def _clamp(value: float) -> float:
+    return max(0.0, min(1.0, value))
+
+
+def describe_creativity(creativity: float | None) -> str:
+    """The latitude instruction for this level, as the Writer is told it."""
+    level = _clamp(DEFAULT_CREATIVITY if creativity is None else creativity)
+    for threshold, description in CREATIVITY_LEVELS:
+        if level <= threshold:
+            return description
+    return CREATIVITY_LEVELS[-1][1]
+
+
+def temperature_for(creativity: float | None) -> float:
+    """The sampling temperature that matches that instruction."""
+    level = _clamp(DEFAULT_CREATIVITY if creativity is None else creativity)
+    span = MAX_TEMPERATURE - MIN_TEMPERATURE
+    return round(MIN_TEMPERATURE + span * level, 2)
+
+
 class WritingStyle(BaseModel):
     """Global prose preferences the author sets once for the whole story."""
 

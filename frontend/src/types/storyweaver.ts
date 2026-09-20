@@ -145,7 +145,8 @@ export interface Scene {
   prose: string
 }
 
-export type EpisodeStatus = 'queued' | 'in_progress' | 'completed'
+/** `planned` means the Director has drafted scenes the author has not approved. */
+export type EpisodeStatus = 'queued' | 'planned' | 'in_progress' | 'completed'
 export type Pacing = 'slow' | 'normal' | 'fast'
 
 export interface Episode {
@@ -157,6 +158,14 @@ export interface Episode {
   summary: string
   status: EpisodeStatus
   pacing: Pacing
+  /**
+   * How this one chapter is written. `null` means "follow the project's
+   * writing style" — these override it for this chapter alone.
+   */
+  creativity: number | null
+  prose_density: ProseDensity | null
+  /** This chapter's mood, in the author's words, quoted to the Writer. */
+  tone_notes: string
 }
 
 // ==========================================================================
@@ -350,6 +359,20 @@ export interface GenerationErrorEvent {
   resumable: boolean
   scenes_completed: number
   usage: UsageReport | null
+}
+
+/** `GET|POST|PUT /api/episodes/{n}/plan` — the layout, before a word is written. */
+export interface EpisodePlan {
+  episode_number: number
+  status: EpisodeStatus
+  scenes: Scene[]
+  /** What this project's target is counted in: Korean is characters. */
+  unit: 'characters' | 'words'
+  target_per_scene: number
+  target_total: number
+  /** What a Korean web-novel 회차 normally runs to, for comparison. */
+  standard_low: number
+  standard_high: number
 }
 
 export interface PendingGeneration {
