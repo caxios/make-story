@@ -24,6 +24,9 @@ STAGE_TEMPERATURES = {
     "lore": 0.0,
     "writer": config.TEMPERATURE,
     "summarizer": 0.2,
+    # Reading an author's paragraph back as structured data. Nothing here is
+    # meant to be invented, so it runs as cold as the other judgement calls.
+    "parse": 0.1,
     "titler": 0.5,
     "transition": config.TEMPERATURE,
 }
