@@ -67,6 +67,64 @@ def test_character_ids_cannot_escape_the_data_directory(tmp_path):
     assert store.get_character("../../evil").internal_state == "x"
 
 
+def test_a_korean_cast_does_not_share_one_file(tmp_path):
+    """Every character outside [A-Za-z0-9._-] used to become an underscore.
+
+    A Korean cast of three-syllable names all landed on `character____.json`
+    and overwrote each other's memory on every episode any of them were in.
+    """
+    store = StructuredStore(tmp_path / "state")
+    cast = ["한병호", "나도현", "임소희", "유라엘", "김현서"]
+
+    for index, character_id in enumerate(cast):
+        store.update_character(character_id, internal_state=f"state-{index}")
+
+    paths = {store.character_path(character_id) for character_id in cast}
+    assert len(paths) == len(cast)
+    for index, character_id in enumerate(cast):
+        assert store.get_character(character_id).internal_state == f"state-{index}"
+
+
+def test_a_korean_id_is_still_readable_in_the_filename(tmp_path):
+    """`data/state/` is somewhere the author looks, not only the program."""
+    store = StructuredStore(tmp_path / "state")
+
+    assert "한병호" in store.character_path("한병호").name
+
+
+def test_two_ids_that_differ_only_in_a_stripped_character_stay_apart(tmp_path):
+    store = StructuredStore(tmp_path / "state")
+
+    store.update_character("소희", internal_state="one")
+    store.update_character("소희?", internal_state="two")
+
+    assert store.get_character("소희").internal_state == "one"
+    assert store.get_character("소희?").internal_state == "two"
+
+
+def test_the_same_name_on_a_mac_and_on_windows_is_the_same_character(tmp_path):
+    """Korean composed one way or the other must not fork the memory."""
+    import unicodedata
+
+    store = StructuredStore(tmp_path / "state")
+    composed = unicodedata.normalize("NFC", "한병호")
+    decomposed = unicodedata.normalize("NFD", "한병호")
+    assert composed != decomposed  # otherwise this test proves nothing
+
+    store.update_character(composed, internal_state="one")
+
+    assert store.get_character(decomposed).internal_state == "one"
+
+
+def test_a_windows_reserved_name_is_still_writable(tmp_path):
+    """`nul`, `con` and friends are devices, not files, on Windows."""
+    store = StructuredStore(tmp_path / "state")
+
+    store.update_character("nul", internal_state="x")
+
+    assert store.get_character("nul").internal_state == "x"
+
+
 def test_known_characters_are_listed(store):
     store.update_character("harry-potter", internal_state="a")
     store.update_character("ron-weasley", internal_state="b")

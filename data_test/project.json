@@ -1,0 +1,148 @@
+{
+  "name": "Untitled Story",
+  "world": {
+    "title": "마법사의 세계",
+    "genre": "fantasy",
+    "tone": "dark but hopeful",
+    "era": "1990년대",
+    "overview": "마법사와 머글이 공존하는 세계. 호그와트는 마법 학교다.",
+    "rules": [
+      {
+        "id": "secrecy",
+        "category": "society",
+        "statement": "마법사의 존재는 머글에게 비밀이다",
+        "exceptions": [
+          "머글 출신 마법사의 가족"
+        ]
+      }
+    ],
+    "locations": [
+      {
+        "id": "hogwarts",
+        "name": "호그와트",
+        "description": "스코틀랜드 산중의 마법학교",
+        "parent_location_id": null,
+        "notable_features": [
+          "움직이는 계단"
+        ]
+      }
+    ],
+    "factions": [],
+    "additional_lore": {}
+  },
+  "characters": [
+    {
+      "id": "harry",
+      "name": "해리",
+      "role": "",
+      "aliases": [],
+      "age": 17,
+      "gender": "남",
+      "appearance": "검은 머리, 둥근 안경",
+      "personality_summary": "용감하고 직관적이다.",
+      "traits": [
+        {
+          "name": "용기",
+          "intensity": 0.9,
+          "description": null
+        }
+      ],
+      "speech_style": "친구에게는 반말, 어른에게는 존댓말.",
+      "values": [
+        "우정",
+        "정의"
+      ],
+      "goals": [
+        "볼드모트를 물리치기"
+      ],
+      "backstory": "",
+      "relationships": [
+        {
+          "target_character_id": "dumbledore",
+          "type": "스승",
+          "sentiment": 0.7,
+          "description": "존경하지만 비밀도 의심한다"
+        }
+      ],
+      "secrets": [
+        "호크룩스 중 하나가 자신 안에 있다"
+      ],
+      "author_notes": ""
+    },
+    {
+      "id": "dumbledore",
+      "name": "덤블도어",
+      "role": "",
+      "aliases": [],
+      "age": 115,
+      "gender": "남",
+      "appearance": "긴 은빛 수염",
+      "personality_summary": "지혜롭고 온화하지만 많은 것을 혼자 짊어진다.",
+      "traits": [
+        {
+          "name": "지혜",
+          "intensity": 1.0,
+          "description": null
+        }
+      ],
+      "speech_style": "품위 있고 신중하다.",
+      "values": [
+        "사랑의 힘"
+      ],
+      "goals": [
+        "해리가 운명을 받아들이도록 준비시키기"
+      ],
+      "backstory": "",
+      "relationships": [
+        {
+          "target_character_id": "harry",
+          "type": "제자",
+          "sentiment": 0.8,
+          "description": "깊이 아끼지만 진실을 숨긴다"
+        }
+      ],
+      "secrets": [
+        "해리가 죽어야 한다는 진실"
+      ],
+      "author_notes": ""
+    }
+  ],
+  "episodes": [
+    {
+      "episode_number": 1,
+      "title": "1화 - 마법사의 세계로",
+      "author_storyline": "해리가 호그와트에 도착하고 론을 만난다.",
+      "scenes": [],
+      "final_text": "",
+      "summary": "",
+      "status": "queued",
+      "pacing": "normal",
+      "creativity": null,
+      "prose_density": null,
+      "tone_notes": ""
+    },
+    {
+      "episode_number": 2,
+      "title": "2화 - 첫 수업",
+      "author_storyline": "첫 비행 수업. 해리의 빗자루 재능이 드러난다.",
+      "scenes": [],
+      "final_text": "",
+      "summary": "",
+      "status": "queued",
+      "pacing": "normal",
+      "creativity": null,
+      "prose_density": null,
+      "tone_notes": ""
+    }
+  ],
+  "style": {
+    "perspective": "third_person_limited",
+    "pov_character_id": null,
+    "tense": "past",
+    "prose_density": "moderate",
+    "dialogue_ratio": 0.4,
+    "target_word_count_per_scene": 1400,
+    "language": "ko",
+    "author_style_notes": ""
+  }
+}

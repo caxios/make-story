@@ -1,0 +1,18 @@
+{
+  "character_id": "harry",
+  "interaction_history": [],
+  "relationship_updates": [
+    {
+      "target_character_id": "ron",
+      "type": "절친한 친구",
+      "sentiment": 0.85,
+      "description": "트롤 사건 이후 진짜 친구. 론의 충성심을 직접 확인했다."
+    }
+  ],
+  "internal_state": "트롤 사건으로 론과 헤르미온느가 진짜 친구가 됐다는 걸 느꼈다.",
+  "current_goals": [
+    "호그와트에 적응하기",
+    "볼드모트 꿈 떨쳐내기"
+  ],
+  "last_updated_episode": 2
+}

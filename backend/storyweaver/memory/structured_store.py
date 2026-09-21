@@ -7,9 +7,11 @@ answer should never go through an embedding.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
+import unicodedata
 from pathlib import Path
 
 from storyweaver.models import CharacterMemory, InteractionRecord, Relationship, StoryMemory
@@ -19,13 +21,35 @@ logger = logging.getLogger(__name__)
 
 STORY_FILENAME = "story_memory.json"
 CHARACTER_PREFIX = "character_"
-_SAFE_ID = re.compile(r"[^A-Za-z0-9._-]")
+# Only what a filesystem cannot take: path separators, the characters Windows
+# reserves, and control codes. Everything else — Korean above all — is kept, so
+# that `data/state/` stays readable by the person whose story it is.
+_UNSAFE_ID = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 
 
 def _character_filename(character_id: str) -> str:
-    """Character ids are author-supplied slugs; keep them from escaping the directory."""
-    safe = _SAFE_ID.sub("_", character_id)
-    return f"{CHARACTER_PREFIX}{safe}.json"
+    """A filename that is safe to write and belongs to exactly one character.
+
+    Character ids are author-supplied, so anything the filesystem cannot take
+    is dropped. That used to mean everything outside `[A-Za-z0-9._-]`, which
+    turned a Korean cast into one filename: 한병호, 나도현 and 임소희 all
+    became `character____.json` and overwrote each other's memory on every
+    episode that any of them appeared in.
+
+    The readable part now keeps the name, and a digest of the whole id is what
+    guarantees the file belongs to one character — two ids that differ only in
+    a stripped character still get their own file. The id is normalised first
+    so that the same name typed on a Mac and on Windows lands on the same file.
+
+    The `character_` prefix does more than label: it is why a name like `..`
+    or a reserved Windows device name can never come out of here.
+    """
+    normalized = unicodedata.normalize("NFC", character_id)
+    # Trailing dots and spaces are legal in an id and illegal in a Windows
+    # filename, so they go too.
+    safe = _UNSAFE_ID.sub("", normalized).strip().strip(".") or "character"
+    digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:8]
+    return f"{CHARACTER_PREFIX}{safe}_{digest}.json"
 
 
 class StructuredStore:
