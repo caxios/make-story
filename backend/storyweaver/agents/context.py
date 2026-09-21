@@ -64,6 +64,27 @@ def format_character_summaries(characters: Sequence[CharacterProfile]) -> str:
     return format_bullets(one(c) for c in characters)
 
 
+# The role vocabulary the Character Workshop offers, plus the English values
+# earlier versions wrote. A project holds a mixture of both, and a prompt that
+# showed one character as "protagonist" and the next as "조연" would be asking
+# the model to read two vocabularies at once.
+ROLE_LABELS = {
+    "protagonist": "주인공",
+    "antagonist": "적대자 / 악역",
+    "deuteragonist": "서브 주인공",
+    "supporting": "조연",
+    "mentor": "스승 / 조력자",
+    "foil": "라이벌 / 대조 인물",
+    "love interest": "연인 / 히로인",
+    "minor": "단역 / 엑스트라",
+}
+
+
+def describe_role(role: str) -> str:
+    """A character's story role, in the words the author sees in the UI."""
+    return ROLE_LABELS.get(role.strip().lower(), role.strip())
+
+
 def format_traits(character: CharacterProfile) -> str:
     def one(trait) -> str:
         text = f"{trait.name} (intensity {trait.intensity:.1f})"

@@ -245,6 +245,32 @@ export const moveEpisode = (episodeNumber: number, offset: number) =>
 export const addEpisodesBatch = (text: string, separator = '---') =>
   request<Episode[]>('/api/episodes/batch', { method: 'POST', body: { text, separator } })
 
+/** One episode as the planner drew it: the author's line, and the outline. */
+export interface ExpandedEpisodeSummary {
+  episode_number: number
+  title: string
+  author_one_line: string
+  author_storyline: string
+}
+
+export interface PlanAllResponse {
+  episodes: ExpandedEpisodeSummary[]
+}
+
+/**
+ * Draw a list of one-liners out into episode outlines.
+ *
+ * One model call per line, run in order so each outline knows what came
+ * before it - so this is slow for a long list, and it is capped at 20.
+ * Nothing is saved: what comes back is for the author to read and edit, and
+ * `addEpisode` is what puts an approved one in the queue.
+ */
+export const planAllEpisodes = (summaries: string[]) =>
+  request<PlanAllResponse>('/api/episodes/plan-all', {
+    method: 'POST',
+    body: { summaries },
+  })
+
 /**
  * Re-read a finished chapter and rewrite its summary.
  *
@@ -346,6 +372,57 @@ export const downloadStory = (format: 'markdown' | 'docx', appendices = true) =>
 
 export const downloadProjectArchive = (includeMemory = true) =>
   download(`/api/export/project/zip?include_memory=${includeMemory}`)
+
+// ==========================================================================
+// Parsing an author's own words
+// ==========================================================================
+
+/**
+ * Read a character out of a paragraph the author wrote.
+ *
+ * Nothing is saved: what comes back is a draft for the author to check in the
+ * character sheet. `existingCharacterIds` covers ids the browser is holding
+ * but has not saved, so a parsed profile cannot land on one that is taken —
+ * saving upserts by id, and a collision would overwrite someone.
+ */
+export const parseCharacter = (text: string, existingCharacterIds: string[]) =>
+  request<CharacterProfile>('/api/parse/character', {
+    method: 'POST',
+    body: { text, existing_character_ids: existingCharacterIds },
+  })
+
+/** Read a world out of a paragraph the author wrote. Nothing is saved. */
+export const parseWorld = (text: string) =>
+  request<WorldLore>('/api/parse/world', { method: 'POST', body: { text } })
+
+/**
+ * Write a parsed world into the project.
+ *
+ * Three different endpoints, because the world is stored in three pieces:
+ * `PUT /api/world` takes only the header, and rules and locations are upserted
+ * one at a time. Sending the whole object to the header endpoint would look
+ * like it worked and quietly drop every rule and location.
+ *
+ * Rules and locations are upserted, so nothing already in the world is
+ * removed — only one that shares an id is replaced.
+ */
+export async function applyParsedWorld(parsed: WorldLore): Promise<WorldLore> {
+  let world = await updateWorld({
+    title: parsed.title,
+    genre: parsed.genre,
+    tone: parsed.tone,
+    era: parsed.era?.trim() ? parsed.era : null,
+    overview: parsed.overview,
+    factions: parsed.factions,
+  })
+  for (const rule of parsed.rules) {
+    world = await upsertRule(rule)
+  }
+  for (const location of parsed.locations) {
+    world = await upsertLocation(location)
+  }
+  return world
+}
 
 /** Hand a downloaded blob to the browser under the filename the API chose. */
 export function saveBlob(blob: Blob, filename: string): void {

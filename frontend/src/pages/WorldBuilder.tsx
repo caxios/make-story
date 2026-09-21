@@ -2,9 +2,13 @@
  * 🌍 World Builder — the overview, the rules the Lore Checker enforces, and
  * where everything happens.
  *
- * The three tabs are three different jobs: writing the premise, writing the
- * constraints, and drawing the map. They do not share a save button, because
- * they do not share a working session.
+ * The last three tabs are three different jobs: writing the premise, writing
+ * the constraints, and drawing the map. They do not share a save button,
+ * because they do not share a working session.
+ *
+ * Quick Setup is the way in before any of that exists: a paragraph read into
+ * all three at once, which is why it is the landing tab on an empty world and
+ * has to ask before it runs on a world that already has something in it.
  */
 
 import {
@@ -15,6 +19,7 @@ import {
   Pencil,
   Plus,
   Scale,
+  Sparkles,
   Trash2,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -86,16 +91,27 @@ const RULE_CATEGORY_LABELS: Record<string, string> = {
   biology: '생물 / 종족 (biology)',
 }
 
-type TabId = 'overview' | 'rules' | 'locations'
+type TabId = 'quick-setup' | 'overview' | 'rules' | 'locations'
 
 export function WorldBuilder() {
   const { project, loading, refresh } = useProject()
-  const [tab, setTab] = useState<TabId>('overview')
+  // Null means the author has not picked a tab yet, and the landing tab is
+  // derived below. An effect that forced the tab instead would drag them back
+  // here on every project reload, because a reload is a new world object.
+  const [chosen, setChosen] = useState<TabId | null>(null)
 
   if (loading) return <div className="sw-panel h-72 animate-pulse-soft" />
   if (!project) return null
 
   const world = project.world
+  // An empty world opens on Quick Setup: there is nothing to edit yet, and a
+  // paragraph is a faster first move than six empty fields. The title is no
+  // use as a signal here — a new project is born holding "Untitled World" —
+  // so emptiness is what the author has actually put in.
+  const blank =
+    !world.overview.trim() && world.rules.length === 0 && world.locations.length === 0
+  const tab: TabId = chosen ?? (blank ? 'quick-setup' : 'overview')
+  const setTab = setChosen
 
   return (
     <>
@@ -108,16 +124,123 @@ export function WorldBuilder() {
         active={tab}
         onChange={setTab}
         tabs={[
+          { id: 'quick-setup', label: '빠른 설정', icon: Sparkles },
           { id: 'overview', label: '기본 전제 (개요)', icon: BookOpen },
           { id: 'rules', label: '세계관 규칙', icon: Scale, count: world.rules.length },
           { id: 'locations', label: '장소 / 공간', icon: MapPin, count: world.locations.length },
         ]}
       />
 
+      {tab === 'quick-setup' && (
+        <QuickSetupTab world={world} onSaved={refresh} onDone={() => setTab('overview')} />
+      )}
       {tab === 'overview' && <OverviewTab world={world} onSaved={refresh} />}
       {tab === 'rules' && <RulesTab rules={world.rules} onChanged={refresh} />}
       {tab === 'locations' && <LocationsTab locations={world.locations} onChanged={refresh} />}
     </>
+  )
+}
+
+// ==========================================================================
+// Quick setup
+// ==========================================================================
+
+/**
+ * A paragraph in, a world out.
+ *
+ * Unlike the character sheet, this one saves as soon as it has read the
+ * description: the other three tabs are where it gets refined, so there is
+ * nowhere sensible to hold an unsaved world in the meantime. That makes it
+ * destructive on a world that already exists, so a world that already exists
+ * gets asked first.
+ */
+function QuickSetupTab({
+  world,
+  onSaved,
+  onDone,
+}: {
+  world: WorldLore
+  onSaved: () => Promise<void>
+  onDone: () => void
+}) {
+  const { success, fromError } = useToast()
+  const [text, setText] = useState('')
+  const [working, setWorking] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+
+  const hasContent =
+    world.overview.trim().length > 0 || world.rules.length > 0 || world.locations.length > 0
+
+  const run = async () => {
+    if (!text.trim()) return
+    setConfirming(false)
+    setWorking(true)
+    try {
+      const parsed = await api.parseWorld(text.trim())
+      await api.applyParsedWorld(parsed)
+      await onSaved()
+      success(
+        `세계관을 반영했습니다 — 규칙 ${parsed.rules.length}개, 장소 ${parsed.locations.length}곳.`,
+      )
+      setText('')
+      onDone()
+    } catch (cause) {
+      fromError(cause, '설명에서 세계관을 읽어내지 못했습니다.')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  return (
+    <Panel
+      title="설명에서 세계관 불러오기"
+      description="세계관을 평소 말하듯 적어 주세요. 제목, 장르, 분위기, 시대, 개요, 규칙, 장소를 읽어내 채워 넣습니다. 세부 조정은 다른 탭에서 하시면 됩니다."
+    >
+      {hasContent && (
+        <div className="mb-4 rounded-lg border border-warn/30 bg-warn/10 p-3 text-xs leading-relaxed text-warn-bright">
+          이미 설정된 세계관이 있습니다. 실행하면 <strong>제목·장르·분위기·시대·개요·세력</strong>이
+          새로 읽어낸 내용으로 교체됩니다. 규칙과 장소는 추가되며, ID가 같은 항목만 교체됩니다 —
+          기존 항목이 삭제되지는 않습니다.
+        </div>
+      )}
+
+      <TextArea
+        label="세계관 설명"
+        rows={12}
+        placeholder={'예시: 마법사와 머글이 공존하는 현대 영국. 호그와트는 스코틀랜드 산중의 마법 학교로, 9와 3/4 승강장을 통해서만 갈 수 있다. 마법의 존재는 머글에게 비밀이며, 어둠의 마법사 볼드모트의 부활이 이야기의 주요 위협이다. 금지된 저주(아바다 케다브라, 크루시오, 임페리우스)는 사용이 금지된다.'}
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+      />
+
+      <div className="mt-4 flex justify-end">
+        <Button
+          variant="primary"
+          icon={Sparkles}
+          loading={working}
+          disabled={!text.trim() || working}
+          onClick={() => (hasContent ? setConfirming(true) : void run())}
+        >
+          {working ? '읽는 중…' : '설명에서 불러오기'}
+        </Button>
+      </div>
+
+      <ConfirmDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        onConfirm={() => void run()}
+        title="기존 세계관을 덮어쓸까요?"
+        confirmLabel="덮어쓰기"
+        message={
+          <>
+            제목, 장르, 분위기, 시대, 개요, 세력이 새로 읽어낸 내용으로 교체됩니다.
+            <p className="mt-2 text-ink-muted">
+              규칙 {world.rules.length}개와 장소 {world.locations.length}곳은 그대로 남고, ID가 같은
+              항목만 교체됩니다. 이미 작성된 회차 본문은 영향을 받지 않습니다.
+            </p>
+          </>
+        }
+      />
+    </Panel>
   )
 }
 

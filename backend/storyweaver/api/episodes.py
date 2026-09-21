@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from typing import Annotated
 
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field, StringConstraints
+
+from storyweaver import telemetry
+from storyweaver.agents import context as ctx
 from storyweaver.agents import director
+from storyweaver.llm import get_llm
 from storyweaver.models import Episode, Scene, StoryBeat
 from storyweaver.models.style import PACING, PROSE_DENSITIES
 from storyweaver.api import deps
@@ -51,6 +56,32 @@ class BatchRequest(BaseModel):
     separator: str = "---"
 
 
+# One line in, an outline out. Each summary costs a model call, so the list is
+# capped: a paste of fifty lines would otherwise sit there spending quota.
+OneLine = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+
+class PlanAllRequest(BaseModel):
+    summaries: list[OneLine] = Field(
+        min_length=1,
+        max_length=20,
+        description="One entry per episode, in order. Each is a one-line or short description.",
+    )
+
+
+class ExpandedEpisodeSummary(BaseModel):
+    """One episode: the author's one line, and the outline drawn out of it."""
+
+    episode_number: int
+    title: str
+    author_one_line: str
+    author_storyline: str
+
+
+class PlanAllResponse(BaseModel):
+    episodes: list[ExpandedEpisodeSummary]
+
+
 def _check_pacing(pacing: str | None) -> None:
     if pacing is not None and pacing not in PACING:
         raise HTTPException(
@@ -72,6 +103,87 @@ def _check_status(status: str | None) -> None:
         raise HTTPException(
             status_code=422, detail=f"Unknown status {status!r}; expected one of {list(STATUSES)}"
         )
+
+
+def _story_so_far(project: Project, limit: int = 6) -> str:
+    """What the queue already contains, so a new outline follows on from it.
+
+    Summaries are used where a chapter has one and the storyline otherwise —
+    the storyline is what the author asked for, the summary is what was
+    actually written, and after generation the second is the truer record.
+    """
+    lines = []
+    for episode in project.episodes[-limit:]:
+        gist = (episode.summary or episode.author_storyline).strip()
+        if gist:
+            lines.append(f"Episode {episode.episode_number}: {gist}")
+    return "\n".join(lines)
+
+
+def _expand_summary(
+    summary: str,
+    episode_number: int,
+    project: Project,
+    story_so_far: str,
+    prior_summaries: list[str],
+) -> str:
+    """Draw one line out into an outline the Director can decompose.
+
+    One model call. The result is prose-shaped planning text, not prose: it
+    becomes the episode's `author_storyline`, which is what every later stage
+    reads.
+    """
+    prior_text = ""
+    if story_so_far:
+        prior_text += f"\n\n--- EPISODES ALREADY IN THE QUEUE ---\n{story_so_far}"
+    if prior_summaries:
+        numbered = "\n".join(prior_summaries)
+        prior_text += f"\n\n--- EARLIER EPISODES IN THIS SAME BATCH ---\n{numbered}"
+
+    prompt = f"""You are a story planning assistant for the serial novel "{project.world.title}".
+The author has given you a one-line summary for episode {episode_number}.
+
+Expand it into a detailed episode outline (4-6 paragraphs) that:
+1. Names the characters who appear in this episode
+2. Describes the main conflict, event, or revelation
+3. Describes the emotional arc - how the characters feel at the start and at the end
+4. Suggests 2-3 key scenes with their location and mood
+5. States the ending beat clearly - what the reader is left with
+
+Do NOT write prose fiction; this is a planning document, not a chapter. Write
+it in the language the author used, in clear and concise sentences.
+
+Do not invent characters or contradict the world and the cast below. Where the
+author's line is thin, develop it in the direction the story is already going
+rather than introducing something new.
+
+--- CAST ---
+{ctx.format_character_summaries(project.characters)}
+
+--- WORLD ---
+{ctx.format_world_summary(project.world)}{prior_text}
+
+--- THE AUTHOR'S ONE LINE FOR EPISODE {episode_number} ---
+{summary}
+
+Return only the outline text. No headers, no JSON, no markdown fences.
+"""
+
+    model = telemetry.meter(get_llm(stage="planner"), "planner")
+    try:
+        result = model.invoke(prompt)
+    except Exception as error:  # noqa: BLE001 - reported to the author
+        raise HTTPException(
+            status_code=502, detail=f"The planner failed on episode {episode_number}: {error}"
+        ) from error
+
+    text = str(getattr(result, "content", result)).strip()
+    if not text:
+        raise HTTPException(
+            status_code=502,
+            detail=f"The planner returned nothing for episode {episode_number}.",
+        )
+    return text
 
 
 @router.get("", response_model=list[Episode])
@@ -102,6 +214,55 @@ def add_episodes_batch(request: BatchRequest) -> list[Episode]:
             raise HTTPException(status_code=422, detail="No outlines found in the text")
         deps.save_project(project)
     return added
+
+
+@router.post("/plan-all", response_model=PlanAllResponse)
+def plan_all_episodes(
+    body: PlanAllRequest,
+    project: Project = Depends(deps.get_project),
+) -> PlanAllResponse:
+    """Draw a list of one-liners out into outlines, for the author to approve.
+
+    Nothing is saved and no prose is written: the browser shows these, the
+    author edits them, and saving is the ordinary `POST /api/episodes` once per
+    approved episode.
+
+    The numbers are where these episodes would land if all of them were
+    approved, so what the author reviews is numbered the way the queue will be.
+    """
+    if not project.characters:
+        raise HTTPException(status_code=409, detail="This story has no characters yet")
+    if not project.world.overview.strip():
+        raise HTTPException(status_code=409, detail="This story has no world yet")
+
+    story_so_far = _story_so_far(project)
+    first_number = project.next_episode_number()
+
+    results: list[ExpandedEpisodeSummary] = []
+    prior_summaries: list[str] = []
+
+    for offset, one_line in enumerate(body.summaries):
+        episode_number = first_number + offset
+        expanded = _expand_summary(
+            summary=one_line,
+            episode_number=episode_number,
+            project=project,
+            story_so_far=story_so_far,
+            prior_summaries=prior_summaries,
+        )
+        results.append(
+            ExpandedEpisodeSummary(
+                episode_number=episode_number,
+                # A placeholder the author renames; the Writer titles the
+                # chapter itself once it is written.
+                title=f"{episode_number}화",
+                author_one_line=one_line,
+                author_storyline=expanded,
+            )
+        )
+        prior_summaries.append(f"Episode {episode_number}: {one_line}")
+
+    return PlanAllResponse(episodes=results)
 
 
 @router.get("/{episode_number}", response_model=Episode)

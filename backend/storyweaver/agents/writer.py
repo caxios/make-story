@@ -129,16 +129,34 @@ def _character_sheets(
         heading = f"### {character.name}"
         if cid == pov_character_id:
             heading += "  (point-of-view character)"
-        blocks.append(
-            "\n".join(
-                [
-                    heading,
-                    f"Appearance: {character.appearance}",
-                    f"Personality: {character.personality_summary}",
-                    f"Speech style: {character.speech_style}",
-                ]
-            )
-        )
+
+        lines = [heading]
+        # Age and standing decide 존댓말 or 반말, and the Writer is the one
+        # actually setting the words down — so it needs them as much as the
+        # character does.
+        if character.age is not None:
+            lines.append(f"Age: {character.age}")
+        if (character.gender or "").strip():
+            lines.append(f"Gender: {character.gender.strip()}")
+        if character.role.strip():
+            lines.append(f"Story role: {context.describe_role(character.role)}")
+        # A label with nothing after it tells the model the field exists and
+        # is blank, which is worse than not raising it at all.
+        for label, value in (
+            ("Appearance", character.appearance),
+            ("Personality", character.personality_summary),
+            ("Speech style", character.speech_style),
+        ):
+            if value.strip():
+                lines.append(f"{label}: {value.strip()}")
+
+        # Only the relationships among the people actually in this scene —
+        # the tension between two of them is what the prose is made of.
+        relationships = context.format_relationships(character, present_ids, characters)
+        if relationships != context.NONE_PLACEHOLDER:
+            lines.append(f"Relationships with others in this scene:\n{relationships}")
+
+        blocks.append("\n".join(lines))
     return "\n\n".join(blocks) if blocks else context.NONE_PLACEHOLDER
 
 

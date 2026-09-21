@@ -14,6 +14,7 @@ import {
   Network,
   Pencil,
   Plus,
+  Sparkles,
   Trash2,
   UserRound,
   Users,
@@ -198,6 +199,13 @@ export function CharacterWorkshop() {
   const [cloning, setCloning] = useState<CharacterProfile | null>(null)
   const [graph, setGraph] = useState<GraphData | null>(null)
 
+  // The "describe them in your own words" path. The parsed profile is not
+  // saved — it opens the ordinary character sheet, pre-filled, because a
+  // model's reading of a paragraph is a draft until the author has seen it.
+  const [parseOpen, setParseOpen] = useState(false)
+  const [parseText, setParseText] = useState('')
+  const [parsing, setParsing] = useState(false)
+
   const characters = useMemo(() => project?.characters ?? [], [project])
 
   // The graph is derived server-side, so it is fetched rather than computed —
@@ -213,6 +221,37 @@ export function CharacterWorkshop() {
       cancelled = true
     }
   }, [tab, characters, fromError])
+
+  const closeParse = () => {
+    setParseOpen(false)
+    setParseText('')
+  }
+
+  const openBlankSheet = () => {
+    setEditing(blankCharacter())
+    setIsNew(true)
+    closeParse()
+  }
+
+  const parse = async () => {
+    if (!parseText.trim()) return
+    setParsing(true)
+    try {
+      const parsed = await api.parseCharacter(
+        parseText.trim(),
+        characters.map((character) => character.id),
+      )
+      // Straight into the ordinary sheet, where every field is editable and
+      // nothing is written until the author saves it themselves.
+      setEditing(parsed)
+      setIsNew(true)
+      closeParse()
+    } catch (cause) {
+      fromError(cause, '설명에서 캐릭터를 읽어내지 못했습니다.')
+    } finally {
+      setParsing(false)
+    }
+  }
 
   const remove = async (character: CharacterProfile) => {
     try {
@@ -240,14 +279,7 @@ export function CharacterWorkshop() {
         title="캐릭터 워크숍"
         description="등장인물의 신원, 말투, 가치관, 비밀 등 AI 에이전트가 연기할 모든 설정을 구성합니다."
         actions={
-          <Button
-            variant="primary"
-            icon={Plus}
-            onClick={() => {
-              setEditing(blankCharacter())
-              setIsNew(true)
-            }}
-          >
+          <Button variant="primary" icon={Plus} onClick={() => setParseOpen(true)}>
             캐릭터 추가
           </Button>
         }
@@ -270,14 +302,7 @@ export function CharacterWorkshop() {
               title="등록된 캐릭터가 없습니다"
               description="에피소드를 진행하려면 최소 한 명 이상의 캐릭터가 필요합니다. 캐릭터 시트의 모든 내용은 AI 에이전트의 대사와 행동의 기준이 됩니다."
               action={
-                <Button
-                  variant="primary"
-                  icon={Plus}
-                  onClick={() => {
-                    setEditing(blankCharacter())
-                    setIsNew(true)
-                  }}
-                >
+                <Button variant="primary" icon={Plus} onClick={() => setParseOpen(true)}>
                   첫 캐릭터 추가하기
                 </Button>
               }
@@ -343,6 +368,38 @@ export function CharacterWorkshop() {
           )}
         </Panel>
       )}
+
+      <Modal
+        open={parseOpen}
+        onClose={closeParse}
+        title="캐릭터 추가"
+        description="인물을 평소 말하듯 설명해 주세요. 이름, 나이, 외모, 성격, 말투, 관계, 목표, 비밀 — 적으신 만큼 캐릭터 시트가 채워집니다."
+        footer={
+          <>
+            <Button variant="ghost" onClick={openBlankSheet} disabled={parsing}>
+              직접 입력하기
+            </Button>
+            <Button
+              variant="primary"
+              icon={Sparkles}
+              loading={parsing}
+              disabled={!parseText.trim() || parsing}
+              onClick={() => void parse()}
+            >
+              {parsing ? '읽는 중…' : '설명에서 불러오기'}
+            </Button>
+          </>
+        }
+      >
+        <TextArea
+          label="인물 설명"
+          hint="읽어낸 내용은 바로 저장되지 않습니다. 캐릭터 시트가 열리면 확인하고 고친 뒤 저장하세요."
+          rows={9}
+          placeholder={'예시: 해리는 17세 남학생으로, 검은 머리카락과 둥근 안경이 특징이다. 용감하고 직관적이지만 충동적인 면이 있다. 론과는 절친한 친구 사이로 서로를 형제처럼 여긴다. 볼드모트를 물리치는 것이 목표다.'}
+          value={parseText}
+          onChange={(event) => setParseText(event.target.value)}
+        />
+      </Modal>
 
       <CharacterDrawer
         character={editing}

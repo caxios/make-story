@@ -27,6 +27,9 @@ STAGE_TEMPERATURES = {
     # Reading an author's paragraph back as structured data. Nothing here is
     # meant to be invented, so it runs as cold as the other judgement calls.
     "parse": 0.1,
+    # Drawing a one-line summary out into an episode outline. Warmer than
+    # parsing, cooler than prose: it is inventing structure, not sentences.
+    "planner": 0.6,
     "titler": 0.5,
     "transition": config.TEMPERATURE,
 }

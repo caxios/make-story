@@ -8,6 +8,7 @@ import { EpisodeQueue } from '@/pages/EpisodeQueue'
 import { MemoryInspector } from '@/pages/MemoryInspector'
 import { ReadingRoom } from '@/pages/ReadingRoom'
 import { Settings } from '@/pages/Settings'
+import { StoryPlanner } from '@/pages/StoryPlanner'
 import { WorldBuilder } from '@/pages/WorldBuilder'
 import { ProjectProvider } from '@/state/ProjectContext'
 
@@ -21,6 +22,7 @@ export default function App() {
               <Route index element={<Dashboard />} />
               <Route path="world" element={<WorldBuilder />} />
               <Route path="characters" element={<CharacterWorkshop />} />
+              <Route path="planner" element={<StoryPlanner />} />
               <Route path="episodes" element={<EpisodeQueue />} />
               <Route path="reading" element={<ReadingRoom />} />
               <Route path="memory" element={<MemoryInspector />} />

@@ -41,6 +41,28 @@ class CharacterTurn(BaseModel):
     )
 
 
+def _identity_line(character: CharacterProfile) -> str:
+    """Role, age and gender on one line — the parts that are actually filled in.
+
+    These live on every `CharacterProfile` and reached no prompt until now,
+    which is why a seventeen-year-old could address a forty-seven-year-old in
+    반말: the model had never been told either age.
+
+    One line rather than one line each, so a character with none of the three
+    does not open their prompt with three blank lines.
+    """
+    parts = []
+    if character.role.strip():
+        parts.append(context.describe_role(character.role))
+    if character.age is not None:
+        parts.append(f"{character.age}세")
+    if (character.gender or "").strip():
+        parts.append(character.gender.strip())
+    # The newline belongs to the line, not to the template — a character with
+    # none of the three should leave no gap behind at all.
+    return "\n" + " · ".join(parts) if parts else ""
+
+
 def build_system_prompt(
     character: CharacterProfile,
     scene: Scene,
@@ -65,6 +87,10 @@ def build_system_prompt(
         "character",
         memory_context=memory_context or NO_MEMORY,
         name=character.name,
+        identity_line=_identity_line(character),
+        # Like the identity line, this carries its own spacing so that a
+        # character without one leaves no gap in the prompt.
+        backstory=f"\n\n{character.backstory.strip()}" if character.backstory.strip() else "",
         personality_summary=character.personality_summary,
         speech_style=character.speech_style,
         traits=context.format_traits(character),
