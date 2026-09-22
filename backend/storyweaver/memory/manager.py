@@ -14,6 +14,7 @@ from pathlib import Path
 from storyweaver import config
 from storyweaver.agents import context
 from storyweaver.memory import vector_store as vs
+from storyweaver.memory.chronicle_store import ChronicleStore, new_entry_id
 from storyweaver.memory.plot_tracker import PlotThread, PlotThreadTracker
 from storyweaver.memory.structured_store import StructuredStore
 from storyweaver.memory.summarizer import EpisodeMemory, summarize_episode
@@ -21,11 +22,13 @@ from storyweaver.memory.vector_store import Memory, VectorStore
 from storyweaver.models import (
     CharacterMemory,
     CharacterProfile,
+    ChronicleEntry,
     Episode,
     InteractionRecord,
     Scene,
     WorldLore,
 )
+from storyweaver.wiki import relationship_section_key, section_for
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +92,7 @@ class MemoryManager:
         )
         self.structured_store = StructuredStore(data_dir)
         self.plot_tracker = PlotThreadTracker(data_dir)
+        self.chronicle = ChronicleStore(data_dir)
 
     # ======================================================================
     # WRITE
@@ -99,15 +103,32 @@ class MemoryManager:
         return self.vector_store.seed_world_lore(world)
 
     def record_episode_completion(
-        self, episode: Episode, memory: EpisodeMemory
+        self,
+        episode: Episode,
+        memory: EpisodeMemory,
+        world: WorldLore | None = None,
+        characters: Mapping[str, CharacterProfile] | None = None,
+        review: bool = True,
     ) -> EpisodeMemory:
         """Commit a finished episode to every store.
 
         Ordering matters: threads are opened before the interactions that cite
         them are indexed, so a retrieved memory never names a thread the tracker
         has never heard of.
+
+        Chronicle entries for this episode are dropped first. Regenerating a
+        chapter must replace its history, not add a second copy of it — a chain
+        holding both "c → b" and "c → d" for one episode has no defensible
+        current value.
+
+        With `review`, the chronicle entries land as proposals: visible on
+        their page and counted by nothing until the author accepts them. That
+        gate exists because the chronicle overrides the author's own setting,
+        so a change the summarizer invented would otherwise become what every
+        later chapter is told this character is.
         """
         number = episode.episode_number
+        self.chronicle.drop_episode(number)
         opened, resolved = self._apply_thread_updates(memory, number)
 
         for update in memory.character_updates:
@@ -151,14 +172,126 @@ class MemoryManager:
                 f"lore_ep{number}_{index}", lore, episode_introduced=number
             )
 
+        recorded = self._record_chronicle(
+            memory, number, world, characters, pending=review
+        )
+
         logger.info(
-            "Episode %d recorded: %d interactions, %d thread updates, %d lore updates",
+            "Episode %d recorded: %d interactions, %d thread updates, %d lore updates, "
+            "%d chronicle entries",
             number,
             stored,
             len(memory.thread_updates),
             len(memory.world_lore_updates),
+            recorded,
         )
         return memory
+
+    def _record_chronicle(
+        self,
+        memory: EpisodeMemory,
+        number: int,
+        world: WorldLore | None = None,
+        characters: Mapping[str, CharacterProfile] | None = None,
+        pending: bool = True,
+    ) -> int:
+        """Turn one episode's memory into chronicle entries. Returns how many.
+
+        Four things become history here: settings that moved, what each
+        character did, relationships that shifted, and lore the episode
+        established. Everything else the summarizer produces is for recall
+        rather than for the record.
+        """
+        entries: list[ChronicleEntry] = []
+
+        def add(
+            subject_type: str,
+            subject_id: str,
+            section_key: str,
+            value: str,
+            *,
+            kind: str,
+            reason: str = "",
+            previous: str | None = None,
+        ) -> None:
+            spec = section_for(subject_type, section_key)  # type: ignore[arg-type]
+            is_log = spec is not None and spec.kind == "log"
+            if previous is None and not is_log:
+                chain = self.chronicle.chain(subject_type, subject_id, section_key)  # type: ignore[arg-type]
+                # With nothing in the chain yet, "what it was before" is what
+                # the author wrote. Without this the very first change to a
+                # setting would record an arrow out of nowhere, and the one
+                # step the author most wants to see — where it started — would
+                # be the one step missing.
+                previous = (
+                    chain[-1].value
+                    if chain
+                    else _authored_value(spec, subject_type, subject_id, world, characters)
+                )
+            # A setting that merely appeared again is not a change. Without
+            # this every episode would write a "no change" line for everyone
+            # present, and the history would be unreadable exactly when it got
+            # long enough to matter.
+            if not is_log and (previous or "").strip() == value.strip():
+                return
+            entries.append(
+                ChronicleEntry(
+                    entry_id=new_entry_id(),
+                    subject_type=subject_type,  # type: ignore[arg-type]
+                    subject_id=subject_id,
+                    section_key=section_key,
+                    source="episode",
+                    episode_number=number,
+                    kind=kind,  # type: ignore[arg-type]
+                    value=value.strip(),
+                    previous="" if is_log else (previous or "").strip(),
+                    reason=reason.strip(),
+                    pending=pending,
+                )
+            )
+
+        for change in memory.changes:
+            add(
+                change.subject_type,
+                change.subject_id,
+                change.section_key,
+                change.value,
+                kind=change.kind,
+                reason=change.reason,
+                # The summarizer's own `previous` is not trusted over the
+                # chain: it is reading the chapter, not the history, and the
+                # chain is what the fold will actually build on.
+                previous=None,
+            )
+
+        for deed in memory.deeds:
+            add("character", deed.character_id, "deeds", deed.summary, kind="added")
+
+        # Relationships are already reported per episode; they only ever
+        # overwrote each other before, which is precisely the history the
+        # author asked to keep.
+        for update in memory.character_updates:
+            for relationship in update.relationship_updates:
+                described = relationship.type
+                if relationship.description:
+                    described = f"{relationship.type} — {relationship.description}"
+                add(
+                    "character",
+                    update.character_id,
+                    relationship_section_key(relationship.target_character_id),
+                    described,
+                    kind="changed",
+                    reason=f"{number}화에서 관계가 달라짐",
+                )
+
+        # Lore the episode established, kept as the world's own log so that
+        # "which chapter introduced this?" finally has an answer.
+        for lore in memory.world_lore_updates:
+            if lore.strip():
+                add("world", "world", "events", lore, kind="revealed")
+
+        self.chronicle.append_many(entries)
+        return len(entries)
 
     def summarize_and_record(
         self,
@@ -167,6 +300,7 @@ class MemoryManager:
         characters: Mapping[str, CharacterProfile],
         language: str = "ko",
         llm=None,
+        review: bool = True,
     ) -> EpisodeMemory:
         """Summarize a finished episode and commit the result."""
         memory = summarize_episode(
@@ -177,7 +311,9 @@ class MemoryManager:
             language=language,
             llm=llm,
         )
-        return self.record_episode_completion(episode, memory)
+        return self.record_episode_completion(
+            episode, memory, world, characters, review=review
+        )
 
     def update_character_state(self, character_id: str, updates: Mapping) -> CharacterMemory:
         """Update a character's emotional state, goals, or relationships."""
@@ -527,6 +663,36 @@ class MemoryManager:
             return ""
         words = entry.document.split()
         return " ".join(words[-STYLE_SAMPLE_WORDS:])
+
+
+def _authored_value(
+    spec,
+    subject_type: str,
+    subject_id: str,
+    world: WorldLore | None,
+    characters: Mapping[str, CharacterProfile] | None,
+) -> str:
+    """What the author's own sheet says a section is, as plain text."""
+    if spec is None or spec.bound_field is None:
+        return ""
+    base = None
+    if subject_type == "character" and characters:
+        base = characters.get(subject_id)
+    elif subject_type == "world":
+        base = world
+    elif subject_type == "location" and world is not None:
+        base = next((l for l in world.locations if l.id == subject_id), None)
+    elif subject_type == "rule" and world is not None:
+        base = next((r for r in world.rules if r.id == subject_id), None)
+    if base is None:
+        return ""
+
+    value = getattr(base, spec.bound_field, None)
+    if isinstance(value, bool):
+        return "유효함" if value else "폐지됨"
+    if isinstance(value, (list, tuple)):
+        return "\n".join(str(getattr(item, "name", item)) for item in value)
+    return "" if value is None else str(value)
 
 
 def _interactions_by_character(

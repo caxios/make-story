@@ -72,6 +72,7 @@ def build_system_prompt(
     history_limit: int = DEFAULT_HISTORY_LIMIT,
     constraints: Sequence[str] = (),
     memory_context: str = "",
+    extra_sections: str = "",
 ) -> str:
     """Render this character's system prompt for the current point in the scene.
 
@@ -88,6 +89,9 @@ def build_system_prompt(
         memory_context=memory_context or NO_MEMORY,
         name=character.name,
         identity_line=_identity_line(character),
+        # Sections the author added to this character's wiki page. They have no
+        # typed field to land in, so this is the only way they reach the model.
+        extra_sections=extra_sections,
         # Like the identity line, this carries its own spacing so that a
         # character without one leaves no gap in the prompt.
         backstory=f"\n\n{character.backstory.strip()}" if character.backstory.strip() else "",
@@ -143,6 +147,7 @@ def act(
     history_limit: int = DEFAULT_HISTORY_LIMIT,
     constraints: Sequence[str] = (),
     memory_context: str = "",
+    extra_sections: str = "",
 ) -> InteractionEntry:
     """Produce this character's contribution for one turn of the scene."""
     prompt = build_system_prompt(
@@ -154,6 +159,7 @@ def act(
         history_limit,
         constraints,
         memory_context,
+        extra_sections,
     )
     model = telemetry.meter(llm or get_llm(stage="character"), "character")
     result: CharacterTurn = model.with_structured_output(CharacterTurn).invoke(prompt)

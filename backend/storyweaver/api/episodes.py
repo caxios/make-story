@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,6 +16,8 @@ from storyweaver.models import Episode, Scene, StoryBeat
 from storyweaver.models.style import PACING, PROSE_DENSITIES
 from storyweaver.api import deps
 from storyweaver.ui.project import Project
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/episodes", tags=["episodes"])
 
@@ -237,6 +240,10 @@ def plan_all_episodes(
 
     story_so_far = _story_so_far(project)
     first_number = project.next_episode_number()
+    # Outlines are approved by the author and become the storyline every later
+    # stage reads, so they are drawn from the cast and world as the story has
+    # left them, not as they were first written down.
+    project = deps.folded_project(project)
 
     results: list[ExpandedEpisodeSummary] = []
     prior_summaries: list[str] = []
@@ -298,6 +305,24 @@ def update_episode(episode_number: int, update: EpisodeUpdate) -> Episode:
     return edited
 
 
+def _follow_renumbering(mapping: dict[int, int | None]) -> None:
+    """Move the chronicle with the queue.
+
+    Episode numbers are positions, not identities: deleting or moving a chapter
+    renumbers every chapter after it. The chronicle stamps entries with that
+    number, so without this an entry recorded in "3화" silently comes to name a
+    different chapter — and this history is the thing the author audits.
+
+    The entries' own order is untouched; only their labels move.
+    """
+    memory = deps.get_memory()
+    if memory is None:
+        return
+    moved = memory.chronicle.renumber(mapping)
+    if moved:
+        logger.info("Renumbered %d chronicle entries to follow the queue", moved)
+
+
 @router.delete("/{episode_number}", response_model=list[Episode])
 def delete_episode(episode_number: int) -> list[Episode]:
     """Delete an episode and close the gap: the queue renumbers itself.
@@ -308,9 +333,15 @@ def delete_episode(episode_number: int) -> list[Episode]:
     with deps.write_lock():
         project = deps.get_project()
         deps.require_episode(project, episode_number)
+        total = len(project.episodes)
         project.remove_episode(episode_number)
         project.renumber_episodes()
         deps.save_project(project)
+        # Everything after the gap moves down one; the deleted chapter's own
+        # entries go with it.
+        mapping: dict[int, int | None] = {episode_number: None}
+        mapping.update({n: n - 1 for n in range(episode_number + 1, total + 1)})
+        _follow_renumbering(mapping)
     deps.get_checkpoints().clear(episode_number)
     return project.episodes
 
@@ -321,8 +352,14 @@ def move_episode(episode_number: int, request: MoveRequest) -> list[Episode]:
     with deps.write_lock():
         project = deps.get_project()
         deps.require_episode(project, episode_number)
+        before = [e.episode_number for e in project.episodes]
         project.move_episode(episode_number, request.offset)
         deps.save_project(project)
+        target = episode_number + request.offset
+        # `move_episode` does nothing when the target is off either end, so the
+        # chronicle must not move either.
+        if target in before:
+            _follow_renumbering({episode_number: target, target: episode_number})
     return project.episodes
 
 
@@ -343,12 +380,14 @@ def summarize_episode(episode_number: int) -> Episode:
         )
 
     memory = deps.require_memory()
+    folded = deps.folded_project(project)
     try:
         recorded = memory.summarize_and_record(
             episode,
-            project.world,
-            project.character_map(),
+            folded.world,
+            folded.character_map(),
             language=project.style.language,
+            review=project.review_chronicle,
         )
     except Exception as error:  # noqa: BLE001 — reported to the author
         raise HTTPException(
@@ -429,15 +468,21 @@ def draft_plan(episode_number: int) -> dict:
         )
 
     memory = deps.get_memory()
+    # The author approves this layout, so it has to be built on who these
+    # people are now. A plan cast from the original sheet would put a
+    # character back in a form the story has already moved them out of, and
+    # the approval gate would become a source of drift instead of a guard.
+    folded = deps.folded_project(project)
+
     memory_context = ""
     if memory is not None:
-        memory_context = memory.build_director_context(project.character_map(), episode)
+        memory_context = memory.build_director_context(folded.character_map(), episode)
 
     try:
         scenes = director.decompose_episode(
             episode,
-            project.world,
-            project.character_map(),
+            folded.world,
+            folded.character_map(),
             memory_context=memory_context,
         )
     except Exception as error:  # noqa: BLE001 — reported to the author

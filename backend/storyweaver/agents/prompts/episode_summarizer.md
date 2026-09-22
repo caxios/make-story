@@ -64,4 +64,49 @@ changed.
 `world_lore_updates` — anything the episode revealed about the world that the
 author had not already specified.
 
+`deeds` — for every character who appeared, one or two sentences on **what they
+did** in this episode. Past tense, plainly told, their actions only. This is
+recorded even when nothing about them changed: appearing in a chapter is worth
+a line in their history.
+
+`changes` — every setting this episode moved. This is the story's chronicle, so
+be exact rather than generous.
+
+Give each one the `subject_type` (character, world, location, rule, faction),
+the `subject_id`, and the `section_key` it belongs to:
+
+- a character: `appearance`, `personality`, `speech`, `role`, `values`,
+  `goals`, `backstory`, `secrets`
+- a place: `description`, `features`, `state` — `state` is where a ruin being
+  destroyed, a gate breaking, or a gate being repaired belongs
+- a rule: `statement`, `exceptions`, `active` — `active` is how a rule is
+  abolished
+- the world: `overview`, `tone`, `era`
+
+Give `previous` (what it was before) and `value` (what it is now), and pick the
+`kind`:
+
+- `changed` — it became something else
+- `revealed` — it was always so; the story has only now told the reader
+- `added` — it did not exist before
+- `removed` — destroyed, abolished, lost
+- `restored` — it is back
+
+**Every change must carry a `reason`: the moment in THIS episode that caused
+it.** This matters more than anything else on this list. What you record here
+becomes what the next episode is told these people and places are — it
+overrides the author's own setting. So:
+
+- A character the author wrote as prickly may become generous, if this episode
+  shows them being worn down by people who care about them. That is a character
+  growing, and it is exactly what should be recorded.
+- A character who is suddenly generous with nothing in the text behind it is
+  not growth, it is you inventing. **Leave it out.**
+
+If you cannot point at the line that caused a change, do not report the change.
+A change with no reason is discarded anyway.
+
+Do not report a setting that merely *appeared* in this episode unchanged. The
+chronicle records movement, not restatement.
+
 Use only the character ids listed above. Write in {language}.

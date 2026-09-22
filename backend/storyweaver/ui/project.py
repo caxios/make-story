@@ -65,6 +65,12 @@ class Project(BaseModel):
     characters: list[CharacterProfile] = Field(default_factory=list)
     episodes: list[Episode] = Field(default_factory=list)
     style: WritingStyle = Field(default_factory=WritingStyle)
+    # Whether a chapter's chronicle entries wait for the author before they
+    # count. On by default, because the chronicle overrides the author's own
+    # setting; off for an author who would rather read the wiki afterwards
+    # than approve a list after every chapter. A gate that is always in the
+    # way gets clicked through without being read, which is worse than none.
+    review_chronicle: bool = True
 
     # --- lookups -----------------------------------------------------------
 

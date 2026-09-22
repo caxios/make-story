@@ -21,8 +21,10 @@ from storyweaver.memory.plot_tracker import PlotThread
 from storyweaver.models import (
     CharacterProfile,
     Episode,
+    EntryKind,
     InteractionRecord,
     Relationship,
+    SubjectType,
     WorldLore,
 )
 
@@ -58,6 +60,49 @@ class CharacterStateUpdate(BaseModel):
     )
 
 
+class FieldChange(BaseModel):
+    """One setting the episode moved, and what in the episode moved it.
+
+    This is what the old `character_updates` could not say. It carried a
+    character's mood, goals and relationships and nothing else, so an episode
+    that cut someone's hair or destroyed a landmark had nowhere to record it —
+    and the next episode grew the hair back.
+    """
+
+    subject_type: SubjectType = Field(
+        default="character", description="character, world, location, rule or faction"
+    )
+    subject_id: str = Field(description="The id of whoever or whatever changed")
+    section_key: str = Field(
+        description="Which part of them changed: appearance, personality, speech, "
+        "role, values, goals, backstory, secrets, state, statement, ..."
+    )
+    previous: str = Field(default="", description="What it was before this episode")
+    value: str = Field(description="What it is now")
+    reason: str = Field(
+        default="",
+        description="The moment in THIS episode that caused it. Required: a change "
+        "you cannot point at is a guess, and it will be discarded.",
+    )
+    kind: EntryKind = Field(
+        default="changed",
+        description="changed, revealed (true all along, only now told), "
+        "added, removed (destroyed/abolished) or restored (repaired)",
+    )
+
+
+class Deed(BaseModel):
+    """What one character did in this episode.
+
+    Separate from a change on purpose: an episode where nothing about a
+    character moved is still an episode they acted in, and the author asked for
+    both.
+    """
+
+    character_id: str
+    summary: str = Field(description="One or two sentences, past tense, plainly told")
+
+
 class EpisodeMemory(BaseModel):
     """Everything the memory layer takes from one finished episode."""
 
@@ -69,6 +114,9 @@ class EpisodeMemory(BaseModel):
     thread_updates: list[ThreadUpdate] = Field(default_factory=list)
     character_updates: list[CharacterStateUpdate] = Field(default_factory=list)
     world_lore_updates: list[str] = Field(default_factory=list)
+    # What the chronicle is made of: settings that moved, and what everyone did.
+    changes: list[FieldChange] = Field(default_factory=list)
+    deeds: list[Deed] = Field(default_factory=list)
 
     def characters_involved(self) -> list[str]:
         """Every character id this episode's memory touches, deduplicated."""
@@ -166,13 +214,50 @@ def _sanitise(
         if t.id.strip()
     ]
 
+    changes = [c for c in memory.changes if _is_justified(c, known)]
+    deeds = [
+        d for d in memory.deeds if d.character_id in known and d.summary.strip()
+    ]
+
     return memory.model_copy(
         update={
             "interactions": interactions,
             "character_updates": updates,
             "thread_updates": threads,
+            "changes": changes,
+            "deeds": deeds,
         }
     )
+
+
+def _is_justified(change: FieldChange, known: set[str]) -> bool:
+    """Whether a reported change has earned its place in the chronicle.
+
+    The chronicle wins over the author's original setting, so an unfounded
+    change does not merely sit in a log — it becomes what the next episode is
+    told this character is. A prickly character may soften across chapters of
+    being worn down; what is not allowed is a character who changes with
+    nothing in the text behind it.
+
+    The reason is therefore the gate, not a decoration. A change is dropped
+    rather than failing the whole episode's memory: losing one line is much
+    cheaper than losing the record of a chapter that has already been paid for.
+    """
+    if not change.value.strip():
+        logger.warning("Dropping an empty change to %s.%s",
+                       change.subject_id, change.section_key)
+        return False
+    if not change.reason.strip():
+        logger.warning(
+            "Dropping an unjustified change to %s.%s (%r): the summarizer named no "
+            "cause in the episode",
+            change.subject_id, change.section_key, change.value[:60],
+        )
+        return False
+    if change.subject_type == "character" and change.subject_id not in known:
+        logger.warning("Dropping a change to unknown character %r", change.subject_id)
+        return False
+    return True
 
 
 def summarize_episode(

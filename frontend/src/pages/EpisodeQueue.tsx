@@ -27,6 +27,7 @@ import { useNavigate } from 'react-router-dom'
 import * as api from '@/api/client'
 import { useGenerationStream } from '@/api/useGenerationStream'
 import { GenerationOverlay } from '@/components/GenerationOverlay'
+import { ChronicleReview } from '@/components/ChronicleReview'
 import { PlanReview } from '@/components/PlanReview'
 import { useToast } from '@/components/ToastContext'
 import {
@@ -101,6 +102,15 @@ export function EpisodeQueue() {
       loadPending()
     }
   }, [generation.status, refresh, loadPending])
+
+  // What the chapter recorded about the cast and the world, for the author to
+  // accept before any of it reaches the next chapter's prompt.
+  const [chronicleFor, setChronicleFor] = useState<number | null>(null)
+  useEffect(() => {
+    if (generation.status === 'complete' && generation.episodeNumber !== null) {
+      setChronicleFor(generation.episodeNumber)
+    }
+  }, [generation.status, generation.episodeNumber])
 
   // A run nobody is watching — the overlay was closed, or the page reloaded —
   // still finishes and saves on the backend. Poll while one is in flight, so
@@ -364,6 +374,12 @@ export function EpisodeQueue() {
         episode={editing}
         onClose={() => setEditing(null)}
         onSaved={refresh}
+      />
+
+      <ChronicleReview
+        open={chronicleFor !== null}
+        episodeNumber={chronicleFor ?? undefined}
+        onClose={() => setChronicleFor(null)}
       />
 
       <ConfirmDialog

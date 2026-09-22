@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from storyweaver.api import deps
+from storyweaver.wiki import record_character_edit
 from storyweaver.models import CharacterProfile
 from storyweaver.ui.project import Project
 
@@ -60,11 +61,20 @@ def relationship_graph(project: Project = Depends(deps.get_project)) -> dict:
 
 @router.post("", response_model=CharacterProfile)
 def upsert_character(character: CharacterProfile) -> CharacterProfile:
-    """Add a character, or replace the one with the same id."""
+    """Add a character, or replace the one with the same id.
+
+    An edit to a field the story has already changed becomes the next entry in
+    that field's history. Without that the save would appear to work and the
+    next chapter would still use the chronicle's value — the edit silently
+    thrown away.
+    """
     with deps.write_lock():
         project = deps.get_project()
         project.upsert_character(character)
         deps.save_project(project)
+        memory = deps.get_memory()
+        if memory is not None:
+            record_character_edit(memory.chronicle, character)
     return character
 
 

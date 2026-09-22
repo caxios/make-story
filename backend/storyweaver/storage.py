@@ -8,9 +8,12 @@ memory. Every state write goes through here instead.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
+import re
 import shutil
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,6 +21,36 @@ logger = logging.getLogger(__name__)
 
 TEMP_SUFFIX = ".tmp"
 BACKUP_DIRNAME = "backups"
+
+# Only what a filesystem cannot take: path separators, the characters Windows
+# reserves, and control codes. Everything else — Korean above all — is kept, so
+# that the state directory stays readable by the person whose story it is.
+_UNSAFE_ID = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
+
+
+def safe_filename(prefix: str, raw_id: str, suffix: str = ".json") -> str:
+    """A filename that is safe to write and belongs to exactly one subject.
+
+    Ids here are author-supplied — character ids, location ids, rule ids — so
+    anything the filesystem cannot take is dropped. That stripping is not
+    enough on its own. When it was `[^A-Za-z0-9._-]` a Korean cast collapsed
+    onto one filename: 한병호, 나도현 and 임소희 all became `character____.json`
+    and overwrote each other's memory on every episode any of them appeared in.
+
+    So the readable part only makes the file recognisable, and a digest of the
+    whole id is what guarantees it belongs to one subject — two ids differing
+    only in a stripped character still get their own file. The id is normalised
+    first so the same name typed on a Mac and on Windows lands on one file.
+
+    `prefix` does more than label: it is why an id like `..` or a reserved
+    Windows device name can never come out of here.
+    """
+    normalized = unicodedata.normalize("NFC", raw_id)
+    # Trailing dots and spaces are legal in an id and illegal in a Windows
+    # filename, so they go too.
+    readable = _UNSAFE_ID.sub("", normalized).strip().strip(".") or "unnamed"
+    digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:8]
+    return f"{prefix}{readable}_{digest}{suffix}"
 
 
 def write_text_atomic(path: Path | str, text: str, encoding: str = "utf-8") -> Path:

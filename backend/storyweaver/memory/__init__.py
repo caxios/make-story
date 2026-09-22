@@ -1,5 +1,6 @@
 """Memory layer: semantic recall, exact state, and plot-thread tracking."""
 
+from storyweaver.memory.chronicle_store import ChronicleStore
 from storyweaver.memory.manager import MemoryManager
 from storyweaver.memory.plot_tracker import PlotThread, PlotThreadTracker
 from storyweaver.memory.structured_store import StructuredStore
@@ -12,6 +13,7 @@ from storyweaver.memory.summarizer import (
 from storyweaver.memory.vector_store import Memory, VectorStore
 
 __all__ = [
+    "ChronicleStore",
     "MemoryManager",
     "PlotThread",
     "PlotThreadTracker",

@@ -14,6 +14,7 @@ from storyweaver.api import (
     parse,
     project,
     telemetry,
+    wiki,
     world,
 )
 
@@ -27,6 +28,7 @@ ROUTERS = [
     export.router,
     telemetry.router,
     parse.router,
+    wiki.router,
 ]
 
 __all__ = ["ROUTERS"]

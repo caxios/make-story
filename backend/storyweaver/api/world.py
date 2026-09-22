@@ -6,6 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from storyweaver.api import deps
+from storyweaver.wiki import (
+    record_location_edit,
+    record_rule_edit,
+    record_world_edit,
+)
 from storyweaver.models import Location, Rule, WorldLore
 from storyweaver.ui.project import Project
 
@@ -28,6 +33,17 @@ def read_world(project: Project = Depends(deps.get_project)) -> WorldLore:
     return project.world
 
 
+def _record(recorder, subject) -> None:
+    """Send an author's edit to the chronicle, when there is one to send it to.
+
+    A field the story has already changed is decided by its chain, not by the
+    model, so an edit that did not join the chain would be quietly discarded.
+    """
+    memory = deps.get_memory()
+    if memory is not None:
+        recorder(memory.chronicle, subject)
+
+
 @router.put("", response_model=WorldLore)
 def update_world(update: WorldUpdate) -> WorldLore:
     with deps.write_lock():
@@ -35,6 +51,7 @@ def update_world(update: WorldUpdate) -> WorldLore:
         for field, value in update.model_dump(exclude_unset=True).items():
             setattr(project.world, field, value)
         deps.save_project(project)
+        _record(record_world_edit, project.world)
     return project.world
 
 
@@ -48,6 +65,7 @@ def upsert_rule(rule: Rule) -> WorldLore:
         project = deps.get_project()
         project.upsert_rule(rule)
         deps.save_project(project)
+        _record(record_rule_edit, rule)
     return project.world
 
 
@@ -72,6 +90,7 @@ def upsert_location(location: Location) -> WorldLore:
         project = deps.get_project()
         project.upsert_location(location)
         deps.save_project(project)
+        _record(record_location_edit, location)
     return project.world
 
 

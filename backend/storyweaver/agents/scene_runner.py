@@ -22,6 +22,7 @@ from storyweaver.agents.prompts import render_prompt
 from storyweaver import telemetry
 from storyweaver.llm import get_llm
 from storyweaver.models import CharacterProfile, InteractionEntry, Scene, WorldLore
+from storyweaver.wiki import free_sections_text
 
 logger = logging.getLogger(__name__)
 
@@ -108,8 +109,13 @@ def character_act(state: SceneSimulationState, llm=None, memory=None) -> dict:
     character = characters[state["next_character_id"]]
 
     memory_context = ""
+    extra_sections = ""
     if memory is not None:
         memory_context = memory.build_character_context(character, state["scene"], characters)
+        # Sections the author added to this character's wiki page — 능력,
+        # 과거사 and the like. They have no typed field to land in, so this is
+        # the only path by which they reach the model.
+        extra_sections = free_sections_text(memory.chronicle, "character", character.id)
 
     entry = character_agent.act(
         character=character,
@@ -121,6 +127,7 @@ def character_act(state: SceneSimulationState, llm=None, memory=None) -> dict:
         llm=llm,
         constraints=state.get("constraints", []),
         memory_context=memory_context,
+        extra_sections=extra_sections,
     )
     return {"interaction_log": state.get("interaction_log", []) + [entry.model_dump()]}
 

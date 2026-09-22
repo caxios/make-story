@@ -203,6 +203,8 @@ export interface Project {
   characters: CharacterProfile[]
   episodes: Episode[]
   style: WritingStyle
+  /** Whether a chapter's chronicle entries wait for the author before counting. */
+  review_chronicle: boolean
 }
 
 export interface ProjectStats {
@@ -426,4 +428,75 @@ export interface Health {
   memory_available: boolean
   memory_error: string
   data_dir: string
+}
+
+// ==========================================================================
+// The wiki and its chronicle
+// ==========================================================================
+
+export type SubjectType = 'character' | 'world' | 'location' | 'rule' | 'faction'
+export type EntrySource = 'author' | 'episode'
+export type SectionKind = 'stateful' | 'log'
+export type EntryKind =
+  | 'initial'
+  | 'changed'
+  | 'added'
+  | 'revealed'
+  | 'removed'
+  | 'restored'
+
+/** One step in the history of one section of one subject. */
+export interface ChronicleEntry {
+  entry_id: string
+  subject_type: SubjectType
+  subject_id: string
+  section_key: string
+  source: EntrySource
+  /** Null for an author's own entry: it happens now, not inside a chapter. */
+  episode_number: number | null
+  /** The real ordering key. Episode numbers move when the queue is reordered. */
+  sequence: number
+  kind: EntryKind
+  value: string
+  previous: string
+  reason: string
+  created_at: string
+  superseded: boolean
+  /** Recorded but not yet accepted: visible, and counted by nothing. */
+  pending: boolean
+}
+
+export interface WikiSection {
+  key: string
+  title: string
+  kind: SectionKind
+  /** The typed field this stands for, or null for a section the author added. */
+  bound_field: string | null
+  author_made: boolean
+  order: number
+  /** Empty for a log section: its entries are the content, not a value. */
+  current: string
+  entries: ChronicleEntry[]
+}
+
+export interface WikiPage {
+  subject_type: SubjectType
+  subject_id: string
+  title: string
+  summary: string
+  sections: WikiSection[]
+}
+
+export interface WikiSubjectRow {
+  subject_type: SubjectType
+  subject_id: string
+  title: string
+  entry_count: number
+  last_episode: number | null
+}
+
+/** A chapter's proposed chronicle entries, none of which count yet. */
+export interface PendingReview {
+  episode_number: number | null
+  entries: ChronicleEntry[]
 }

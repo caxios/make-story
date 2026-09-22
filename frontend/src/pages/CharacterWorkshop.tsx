@@ -7,6 +7,7 @@
  */
 
 import {
+  BookMarked,
   Copy,
   Eye,
   EyeOff,
@@ -20,6 +21,7 @@ import {
   Users,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import * as api from '@/api/client'
 import { CharacterGraph } from '@/components/CharacterGraph'
@@ -191,6 +193,7 @@ type TabId = 'cast' | 'graph'
 export function CharacterWorkshop() {
   const { project, loading, refresh } = useProject()
   const { success, fromError } = useToast()
+  const navigate = useNavigate()
 
   const [tab, setTab] = useState<TabId>('cast')
   const [editing, setEditing] = useState<CharacterProfile | null>(null)
@@ -320,6 +323,9 @@ export function CharacterWorkshop() {
                 }}
                 onClone={() => setCloning(character)}
                 onDelete={() => setDeleting(character)}
+                onWiki={() =>
+                  navigate(`/wiki/character/${encodeURIComponent(character.id)}`)
+                }
               />
             ))}
           </div>
@@ -443,11 +449,13 @@ function CharacterCard({
   onEdit,
   onClone,
   onDelete,
+  onWiki,
 }: {
   character: CharacterProfile
   onEdit: () => void
   onClone: () => void
   onDelete: () => void
+  onWiki: () => void
 }) {
   const strongest = [...character.traits].sort((a, b) => b.intensity - a.intensity).slice(0, 3)
 
@@ -464,6 +472,11 @@ function CharacterCard({
           <p className="mt-1 font-mono text-xs text-ink-muted">#{character.id}</p>
         </div>
         <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          <IconButton
+            icon={BookMarked}
+            title={`${character.name} 위키 — 지금까지 무엇이 변했는지`}
+            onClick={onWiki}
+          />
           <IconButton icon={Pencil} title={`${character.name} 수정`} onClick={onEdit} />
           <IconButton icon={Copy} title={`${character.name} 복제`} onClick={onClone} />
           <IconButton icon={Trash2} title={`${character.name} 삭제`} onClick={onDelete} />

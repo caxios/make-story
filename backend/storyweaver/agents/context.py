@@ -127,8 +127,24 @@ def format_beats(beats: Sequence[StoryBeat]) -> str:
 
 
 def format_world_summary(world: WorldLore) -> str:
+    """The world as every agent is told it.
+
+    Factions and `additional_lore` are included because they were not, and an
+    author who wrote "불사조 기사단" into the world got a model that had never
+    heard of it. They are stored, exported and indexed for recall — this is the
+    only path by which they reach a prompt, and it is shared by the Director,
+    the Character Agent, the Lore Checker, the Writer and the Summarizer.
+    """
     era = f", {world.era}" if world.era else ""
-    return f"{world.title} — a {world.tone} {world.genre} setting{era}.\n\n{world.overview}"
+    parts = [f"{world.title} — a {world.tone} {world.genre} setting{era}.", world.overview]
+
+    if world.factions:
+        parts.append("Factions and powers: " + ", ".join(world.factions) + ".")
+    for heading, body in world.additional_lore.items():
+        if str(body).strip():
+            parts.append(f"{heading}: {body}")
+
+    return "\n\n".join(part for part in parts if str(part).strip())
 
 
 def format_interaction_log(

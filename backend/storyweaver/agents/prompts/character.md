@@ -28,7 +28,7 @@ doing so whatever their ages say.
 
 ## Your Secrets
 {secrets}
-(You know these but must not reveal them unless the story naturally demands it.)
+(You know these but must not reveal them unless the story naturally demands it.){extra_sections}
 
 ## The World You Live In
 {world_summary}

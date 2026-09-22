@@ -8,6 +8,7 @@
  */
 
 import {
+  BookMarked,
   BookOpen,
   Brain,
   ChevronLeft,
@@ -40,6 +41,7 @@ const NAV: NavItem[] = [
   { to: '/planner', label: '스토리 플래너', icon: ClipboardList },
   { to: '/episodes', label: '에피소드 큐', icon: ListOrdered },
   { to: '/reading', label: '리딩룸 (본문 열람)', icon: Feather },
+  { to: '/wiki', label: '위키', icon: BookMarked },
   { to: '/memory', label: '메모리 인스펙터', icon: Brain },
   { to: '/settings', label: '설정', icon: Settings },
 ]

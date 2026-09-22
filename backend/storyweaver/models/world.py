@@ -12,6 +12,11 @@ class Rule(BaseModel):
     category: str                   # "magic", "politics", "physics", ...
     statement: str                  # natural-language rule
     exceptions: list[str] = Field(default_factory=list)
+    # A rule can be abolished partway through a serial — the ban is lifted, the
+    # treaty collapses. `statement` cannot say that, and deleting the rule would
+    # lose the fact that it used to hold, which is exactly what the chronicle
+    # exists to keep.
+    active: bool = True
 
 
 class Location(BaseModel):
@@ -22,6 +27,10 @@ class Location(BaseModel):
     description: str
     parent_location_id: str | None = None   # for hierarchy (Hogwarts > Great Hall)
     notable_features: list[str] = Field(default_factory=list)
+    # What has become of the place: "파괴됨", "고장", "봉쇄됨". `description` is
+    # prose about what it is; this is its condition now, and a place's condition
+    # can go and come back — a gate breaks, and later it is repaired.
+    status: str = ""
 
 
 class WorldLore(BaseModel):

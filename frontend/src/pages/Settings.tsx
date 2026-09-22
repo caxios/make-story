@@ -56,9 +56,68 @@ export function Settings() {
       />
       <div className="space-y-5">
         <StylePanel />
+        <ChroniclePanel />
         <TelemetryPanel />
       </div>
     </>
+  )
+}
+
+// ==========================================================================
+// The chronicle's review gate
+// ==========================================================================
+
+function ChroniclePanel() {
+  const { project, refresh } = useProject()
+  const { success, fromError } = useToast()
+  const [saving, setSaving] = useState(false)
+
+  const review = project?.review_chronicle ?? true
+
+  const toggle = async (next: boolean) => {
+    if (!project) return
+    setSaving(true)
+    try {
+      await api.saveProject({ ...project, review_chronicle: next })
+      await refresh()
+      success(
+        next
+          ? '회차를 쓰고 나면 기록을 먼저 확인하게 됩니다.'
+          : '기록이 확인 없이 바로 위키에 반영됩니다.',
+      )
+    } catch (cause) {
+      fromError(cause, '설정을 저장하지 못했습니다.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Panel
+      title="위키 기록 확인"
+      description="회차를 쓰고 나면 AI가 인물과 세계관의 변화를 위키에 기록합니다. 그 기록을 반영하기 전에 확인할지 정합니다."
+    >
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-sm leading-relaxed text-ink-dim">
+          {review
+            ? '회차가 끝나면 기록 목록이 뜹니다. 승인한 것만 위키에 남고, 다음 회차를 쓸 때 AI가 보게 됩니다.'
+            : '기록이 곧바로 반영됩니다. 빠르지만, AI가 잘못 기록한 변화도 그대로 다음 회차에 쓰입니다.'}
+          <span className="mt-2 block text-xs text-ink-muted">
+            연대기는 작가가 처음 쓴 설정을 이깁니다. 그래서 확인을 끄시면, 지어낸 변화
+            하나가 그 뒤의 모든 회차에 사실로 전달됩니다. 위키에서 언제든 취소할 수는
+            있습니다.
+          </span>
+        </p>
+        <Button
+          variant={review ? 'secondary' : 'primary'}
+          loading={saving}
+          disabled={saving || !project}
+          onClick={() => void toggle(!review)}
+        >
+          {review ? '확인 끄기' : '확인 켜기'}
+        </Button>
+      </div>
+    </Panel>
   )
 }
 

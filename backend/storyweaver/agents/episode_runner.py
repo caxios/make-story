@@ -601,6 +601,7 @@ def run_episode(
     transitions: bool = True,
     clear_checkpoint: bool = True,
     plan: Sequence[Scene] | None = None,
+    review_chronicle: bool = True,
 ) -> tuple[Episode, dict[str, Any]]:
     """Run an episode end to end.
 
@@ -676,6 +677,7 @@ def run_episode(
                 char_map,
                 language=final["writing_style"].language,
                 llm=(models or PipelineModels()).summarizer,
+                review=review_chronicle,
             )
             final["episode_memory"] = episode_memory
             # The summary also lives on the episode itself, so it is saved with

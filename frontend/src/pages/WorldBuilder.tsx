@@ -12,6 +12,7 @@
  */
 
 import {
+  BookMarked,
   BookOpen,
   ChevronRight,
   CornerDownRight,
@@ -23,6 +24,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import * as api from '@/api/client'
 import { useToast } from '@/components/ToastContext'
@@ -95,6 +97,7 @@ type TabId = 'quick-setup' | 'overview' | 'rules' | 'locations'
 
 export function WorldBuilder() {
   const { project, loading, refresh } = useProject()
+  const navigate = useNavigate()
   // Null means the author has not picked a tab yet, and the landing tab is
   // derived below. An effect that forced the tab instead would drag them back
   // here on every project reload, because a reload is a new world object.
@@ -118,6 +121,11 @@ export function WorldBuilder() {
       <PageHeader
         title="세계관 빌더"
         description="작품의 기본 전제, 지켜야 할 세계관 규칙, 그리고 이야기가 펼쳐지는 장소들을 정의합니다."
+        actions={
+          <Button icon={BookMarked} onClick={() => navigate('/wiki/world/world')}>
+            위키에서 보기
+          </Button>
+        }
       />
 
       <Tabs

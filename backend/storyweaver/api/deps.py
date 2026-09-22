@@ -17,6 +17,7 @@ from storyweaver.agents.checkpoint import CheckpointStore
 from storyweaver.memory import MemoryManager
 from storyweaver.models import CharacterProfile, Episode
 from storyweaver.ui.project import Project, ProjectStore
+from storyweaver.wiki import fold_character, fold_world
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +56,38 @@ def get_store() -> ProjectStore:
 
 
 def get_project() -> Project:
-    """The project as it currently sits on disk."""
+    """The project as it currently sits on disk.
+
+    This is what the author typed — the starting point, not the current state.
+    Anything that feeds a model wants `folded_project()` instead.
+    """
     return get_store().load()
+
+
+def folded_project(project: Project | None = None) -> Project:
+    """The project as the story has left it: settings plus their chronicle.
+
+    Everything that reaches a model goes through here. The author's sheet says
+    where a character started; the chronicle says what the story has done to
+    them since, and it is the second one a chapter has to be written from — or
+    the haircut from episode 1 grows back in episode 2.
+
+    With no memory layer, or with nothing recorded yet, this is the project
+    unchanged. The fold is inert until the chronicle has something to say.
+    """
+    project = project if project is not None else get_project()
+    memory = get_memory()
+    if memory is None or memory.chronicle.is_empty():
+        return project
+    return project.model_copy(
+        update={
+            "world": fold_world(memory.chronicle, project.world),
+            "characters": [
+                fold_character(memory.chronicle, character)
+                for character in project.characters
+            ],
+        }
+    )
 
 
 def save_project(project: Project) -> Project:

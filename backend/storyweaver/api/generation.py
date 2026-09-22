@@ -227,6 +227,11 @@ def _start_job(project: Project, episode_number: int, max_turns: int) -> _Job:
     project.update_episode(episode.model_copy(update={"status": "in_progress"}))
     deps.save_project(project)
 
+    # The chapter is written from what the story has made of these people and
+    # places, not from the sheet the author filled in before it started. The
+    # fold happens once, here, so no agent has to remember to do it.
+    folded = deps.folded_project(project)
+
     job = _Job(
         episode_number=episode_number,
         max_turns=max_turns,
@@ -254,9 +259,9 @@ def _start_job(project: Project, episode_number: int, max_turns: int) -> _Job:
                 try:
                     done, final = episode_runner.run_episode(
                         episode,
-                        project.world,
-                        project.character_map(),
-                        style=project.style,
+                        folded.world,
+                        folded.character_map(),
+                        style=folded.style,
                         max_turns_per_scene=max_turns,
                         memory=memory,
                         checkpoints=checkpoints,
@@ -267,6 +272,7 @@ def _start_job(project: Project, episode_number: int, max_turns: int) -> _Job:
                         # Scenes the author approved are written as approved;
                         # only an unplanned episode gets the Director.
                         plan=approved_plan,
+                        review_chronicle=folded.review_chronicle,
                     )
                 except Exception as error:  # noqa: BLE001 — reported to the client
                     logger.exception("Episode %d failed", episode_number)

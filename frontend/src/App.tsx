@@ -9,6 +9,8 @@ import { MemoryInspector } from '@/pages/MemoryInspector'
 import { ReadingRoom } from '@/pages/ReadingRoom'
 import { Settings } from '@/pages/Settings'
 import { StoryPlanner } from '@/pages/StoryPlanner'
+import { Wiki } from '@/pages/Wiki'
+import { WikiSubject } from '@/pages/WikiSubject'
 import { WorldBuilder } from '@/pages/WorldBuilder'
 import { ProjectProvider } from '@/state/ProjectContext'
 
@@ -25,6 +27,8 @@ export default function App() {
               <Route path="planner" element={<StoryPlanner />} />
               <Route path="episodes" element={<EpisodeQueue />} />
               <Route path="reading" element={<ReadingRoom />} />
+              <Route path="wiki" element={<Wiki />} />
+              <Route path="wiki/:subjectType/:subjectId" element={<WikiSubject />} />
               <Route path="memory" element={<MemoryInspector />} />
               <Route path="settings" element={<Settings />} />
               <Route path="*" element={<Navigate to="/" replace />} />

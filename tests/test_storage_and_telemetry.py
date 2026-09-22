@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import json
+import unicodedata
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from storyweaver import telemetry
-from storyweaver.storage import backup_directory, prune_backups, write_text_atomic
+from storyweaver.storage import (
+    backup_directory,
+    prune_backups,
+    safe_filename,
+    write_text_atomic,
+)
 from storyweaver.telemetry import CallRecord, UsageLog, record_usage
 
 
@@ -70,6 +77,62 @@ def test_unicode_survives_a_round_trip(tmp_path):
     write_text_atomic(target, "떡밥 ◇◇◇ Erised")
 
     assert target.read_text(encoding="utf-8") == "떡밥 ◇◇◇ Erised"
+
+
+# ==========================================================================
+# Filenames for author-supplied ids
+# ==========================================================================
+
+def test_ids_that_differ_only_outside_ascii_get_different_files():
+    """The scheme this replaced mapped a whole Korean cast onto one filename.
+
+    `[^A-Za-z0-9._-]` → `_` turned 한병호, 나도현 and 임소희 into
+    `character____.json`, and they overwrote each other's memory for six
+    episodes. Every store that keys files by an author-supplied id uses this.
+    """
+    names = ["한병호", "나도현", "임소희", "유라엘", "김현서"]
+
+    filenames = {safe_filename("character_", name) for name in names}
+
+    assert len(filenames) == len(names)
+
+
+def test_the_id_stays_readable_in_the_filename():
+    assert "한병호" in safe_filename("character_", "한병호")
+
+
+def test_the_same_name_composed_two_ways_gives_one_filename():
+    """Korean composed on a Mac and on Windows must not fork the record."""
+    composed = unicodedata.normalize("NFC", "한병호")
+    decomposed = unicodedata.normalize("NFD", "한병호")
+    assert composed != decomposed  # otherwise this test proves nothing
+
+    assert safe_filename("c_", composed) == safe_filename("c_", decomposed)
+
+
+def test_two_ids_differing_only_in_a_stripped_character_stay_apart():
+    assert safe_filename("c_", "소희") != safe_filename("c_", "소희?")
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    ["../../escape", "..", "C:/Windows/system32", "a\\b", 'a"b<c>d|e', "nul", "con", "   ", "."],
+)
+def test_a_hostile_id_cannot_escape_or_name_a_device(hostile):
+    name = safe_filename("character_", hostile)
+
+    assert "/" not in name and "\\" not in name
+    assert not name.startswith(".")
+    assert Path(name).name == name
+    assert name.startswith("character_")
+
+
+def test_an_id_that_strips_to_nothing_still_gets_a_file():
+    first = safe_filename("c_", "???")
+    second = safe_filename("c_", "***")
+
+    assert first.endswith(".json") and second.endswith(".json")
+    assert first != second  # the digest still tells them apart
 
 
 # ==========================================================================

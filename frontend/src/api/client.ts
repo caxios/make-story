@@ -8,6 +8,7 @@
  */
 
 import type {
+  ChronicleEntry,
   CharacterGraph,
   CharacterMemoryState,
   CharacterProfile,
@@ -20,12 +21,17 @@ import type {
   MemoryStatus,
   Pacing,
   PendingGeneration,
+  PendingReview,
   ProseDensity,
   PlotThreads,
   Project,
   ProjectStats,
   Rule,
+  SectionKind,
+  SubjectType,
   Telemetry,
+  WikiPage,
+  WikiSubjectRow,
   WorldLore,
   WritingStyle,
 } from '@/types/storyweaver'
@@ -423,6 +429,104 @@ export async function applyParsedWorld(parsed: WorldLore): Promise<WorldLore> {
   }
   return world
 }
+
+// ==========================================================================
+// The wiki
+// ==========================================================================
+
+export const getWikiSubjects = () => request<WikiSubjectRow[]>('/api/wiki/subjects')
+
+export const getWikiPage = (subjectType: SubjectType, subjectId: string) =>
+  request<WikiPage>(`/api/wiki/${subjectType}/${encodeURIComponent(subjectId)}`)
+
+/** The whole story's history in order — or one chapter's, with `episode`. */
+export const getChronicleTimeline = (episode?: number) =>
+  request<ChronicleEntry[]>(
+    `/api/wiki/timeline${episode === undefined ? '' : `?episode=${episode}`}`,
+  )
+
+export const setWikiSummary = (
+  subjectType: SubjectType,
+  subjectId: string,
+  summary: string,
+) =>
+  request<WikiPage>(
+    `/api/wiki/${subjectType}/${encodeURIComponent(subjectId)}/summary`,
+    { method: 'PUT', body: { summary } },
+  )
+
+export const addWikiSection = (
+  subjectType: SubjectType,
+  subjectId: string,
+  body: { title: string; kind?: SectionKind; order?: number },
+) =>
+  request<WikiPage>(
+    `/api/wiki/${subjectType}/${encodeURIComponent(subjectId)}/sections`,
+    { method: 'POST', body },
+  )
+
+export const deleteWikiSection = (
+  subjectType: SubjectType,
+  subjectId: string,
+  sectionKey: string,
+) =>
+  request<WikiPage>(
+    `/api/wiki/${subjectType}/${encodeURIComponent(subjectId)}/sections/${encodeURIComponent(sectionKey)}`,
+    { method: 'DELETE' },
+  )
+
+/**
+ * Change what a section says.
+ *
+ * Nothing is overwritten: this adds the next entry to that section's history,
+ * which is the whole point — what a thing used to be is not lost when it
+ * becomes something else.
+ */
+export const addChronicleEntry = (
+  subjectType: SubjectType,
+  subjectId: string,
+  sectionKey: string,
+  body: { value: string; reason?: string },
+) =>
+  request<WikiPage>(
+    `/api/wiki/${subjectType}/${encodeURIComponent(subjectId)}/sections/${encodeURIComponent(sectionKey)}/entries`,
+    { method: 'POST', body },
+  )
+
+/** What a chapter recorded, waiting for the author. None of it counts yet. */
+export const getPendingReview = (episode?: number) =>
+  request<PendingReview>(
+    `/api/wiki/pending${episode === undefined ? '' : `?episode=${episode}`}`,
+  )
+
+/**
+ * Accept some proposals and throw the rest away.
+ *
+ * Accepted entries start counting — they fold into what the next chapter is
+ * told. Discarded ones are deleted rather than struck through: a proposal
+ * nobody accepted is not part of the story's history.
+ */
+export const applyChronicleReview = (
+  body: { accept: string[]; discard: string[] },
+  episode?: number,
+) =>
+  request<PendingReview>(
+    `/api/wiki/pending/apply${episode === undefined ? '' : `?episode=${episode}`}`,
+    { method: 'POST', body },
+  )
+
+/** Take back an entry — how an author undoes a change the AI invented. */
+export const retractChronicleEntry = (entryId: string) =>
+  request<ChronicleEntry>(`/api/wiki/entries/${entryId}/retract`, { method: 'POST' })
+
+export const restoreChronicleEntry = (entryId: string) =>
+  request<ChronicleEntry>(`/api/wiki/entries/${entryId}/restore`, { method: 'POST' })
+
+/** Correct what an entry says. Where it sits in history does not move. */
+export const editChronicleEntry = (
+  entryId: string,
+  body: { value?: string; reason?: string },
+) => request<ChronicleEntry>(`/api/wiki/entries/${entryId}`, { method: 'PUT', body })
 
 /** Hand a downloaded blob to the browser under the filename the API chose. */
 export function saveBlob(blob: Blob, filename: string): void {
