@@ -7,6 +7,7 @@ Streamlit app calls, so the two front ends cannot drift apart.
 
 from storyweaver.api import (
     characters,
+    concept,
     episodes,
     export,
     generation,
@@ -29,6 +30,7 @@ ROUTERS = [
     telemetry.router,
     parse.router,
     wiki.router,
+    concept.router,
 ]
 
 __all__ = ["ROUTERS"]

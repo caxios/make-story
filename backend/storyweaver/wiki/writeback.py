@@ -106,8 +106,49 @@ def record_rule_edit(store: ChronicleStore, rule: Rule) -> int:
     return _record_changed_fields(store, "rule", rule.id, rule)
 
 
+def forget_subject(
+    store: ChronicleStore,
+    subject_type: SubjectType,
+    subject_id: str,
+    note: str = "",
+    title: str = "",
+) -> bool:
+    """A subject is gone from the project. Decide what the wiki keeps of them.
+
+    The author asked for concept-stage people to be changeable and deletable
+    later, and a concept session mints a whole cast at once — several of whom
+    will be cut before episode one. Those were never in the story, so keeping a
+    page for each would bury the wiki in people the reader never met.
+
+    But a character the story actually used is a different case. That they were
+    written out is itself something that happened, and their episode records are
+    the only account of what they did while they were here. Their page stays,
+    marked, so an author auditing episode 14 can still find out who that was.
+
+    Returns True when the page was kept (retired), False when it was dropped.
+    """
+    if store.episode_entries(subject_type, subject_id) == 0:
+        store.drop_subject(subject_type, subject_id)
+        return False
+
+    subject = store.get_wiki_subject(subject_type, subject_id)
+    # The page's title is normally looked up from the project, which no longer
+    # has them — so it is pinned here, or the page would be headed by its id.
+    store.save_wiki_subject(
+        subject.model_copy(
+            update={
+                "retired": True,
+                "retired_note": note.strip(),
+                "title": subject.title or title.strip() or subject_id,
+            }
+        )
+    )
+    return True
+
+
 __all__ = [
     "AUTHOR_REASON",
+    "forget_subject",
     "record_character_edit",
     "record_location_edit",
     "record_rule_edit",

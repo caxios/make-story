@@ -48,8 +48,42 @@ def test_factions_are_declared_but_not_yet_bound():
         assert section.bound_field is None
 
 
+def test_the_work_itself_has_a_page():
+    """A logline and an arc belong to no character, place, rule or world."""
+    keys = [s.key for s in sections_for("story")]
+
+    assert {"logline", "arc", "ending"} <= set(keys)
+
+
+def test_nothing_on_the_story_page_is_bound_to_a_model():
+    """It is a plan, not a setting. There is no typed model behind a plan."""
+    for section in sections_for("story"):
+        assert section.bound_field is None
+
+
+def test_the_arc_never_becomes_world_lore():
+    """The one that matters.
+
+    `format_world_summary` is rendered into the Director's, the Character
+    Agent's, the Lore Checker's, the Writer's and the Summarizer's prompts. A
+    section of the plan bound to a `WorldLore` field would put the planned
+    ending in front of every character, and they would play their scenes
+    already knowing how it ends — which reads as nobody ever being surprised,
+    and looks wrong in no single chapter.
+    """
+    story_fields = {s.bound_field for s in sections_for("story")} - {None}
+
+    assert story_fields == set()
+
+
+def test_the_episode_outline_accumulates_rather_than_replacing():
+    """One line per episode, in order — not a value that succeeds itself."""
+    assert section_for("story", "episodes").kind == "log"
+    assert section_for("story", "decisions").kind == "log"
+
+
 def test_every_subject_type_has_sections():
-    for subject_type in ("character", "world", "location", "rule", "faction"):
+    for subject_type in ("story", "character", "world", "location", "rule", "faction"):
         assert sections_for(subject_type), f"{subject_type} has no sections"
 
 

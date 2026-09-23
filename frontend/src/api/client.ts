@@ -9,6 +9,8 @@
 
 import type {
   ChronicleEntry,
+  ConceptCommitResult,
+  ConceptSessionView,
   CharacterGraph,
   CharacterMemoryState,
   CharacterProfile,
@@ -429,6 +431,58 @@ export async function applyParsedWorld(parsed: WorldLore): Promise<WorldLore> {
   }
   return world
 }
+
+// ==========================================================================
+// The concept session
+// ==========================================================================
+
+/** The session in progress, or `null`. This is what survives a browser restart. */
+export const getConceptSession = () => request<ConceptSessionView>('/api/concept')
+
+/**
+ * Open a session with a spread of concepts.
+ *
+ * The seed may be empty — with nothing to go on the spread ranges across
+ * genres, and with a hint all of them honour it and differ underneath.
+ */
+export const proposeConcepts = (seed = '', count = 3) =>
+  request<ConceptSessionView>('/api/concept/propose', {
+    method: 'POST',
+    body: { seed, count },
+  })
+
+/**
+ * Keep one proposal, and draw its chapter outline.
+ *
+ * The outline is drawn for the one that was kept rather than for the whole
+ * spread: two dozen lines written to be thrown away, and asking for all of it
+ * at once is what made the model starve the last concept.
+ */
+export const chooseConcept = (index: number, episodes = 12) =>
+  request<ConceptSessionView>('/api/concept/choose', {
+    method: 'POST',
+    body: { index, episodes },
+  })
+
+export const redrawOutline = (episodes: number) =>
+  request<ConceptSessionView>('/api/concept/outline', {
+    method: 'POST',
+    body: { episodes },
+  })
+
+/** Revise the chosen concept once. As many times as the author wants. */
+export const refineConcept = (instruction: string) =>
+  request<ConceptSessionView>('/api/concept/refine', {
+    method: 'POST',
+    body: { instruction },
+  })
+
+/** Write the concept into the project. Refused if the project already has a story. */
+export const commitConcept = () =>
+  request<ConceptCommitResult>('/api/concept/commit', { method: 'POST' })
+
+export const discardConceptSession = () =>
+  request<void>('/api/concept', { method: 'DELETE' })
 
 // ==========================================================================
 // The wiki

@@ -32,6 +32,7 @@ import { cn } from '@/lib/cn'
 import type { SectionKind, SubjectType, WikiPage, WikiSection } from '@/types/storyweaver'
 
 const TYPE_LABELS: Record<SubjectType, string> = {
+  story: '작품',
   character: '인물',
   world: '세계관',
   location: '장소',
@@ -202,6 +203,7 @@ export function WikiSubject() {
           </h1>
           <p className="mt-1 flex items-center gap-2 text-xs text-ink-muted">
             <Badge>{TYPE_LABELS[page.subject_type]}</Badge>
+            {page.retired && <Badge tone="warn">삭제된 인물</Badge>}
             <span className="font-mono">{page.subject_id}</span>
           </p>
         </div>
@@ -209,6 +211,13 @@ export function WikiSubject() {
           섹션 추가
         </Button>
       </div>
+
+      {page.retired && (
+        <p className="rounded-lg border border-line bg-white/3 p-3 text-sm text-ink-dim">
+          {page.retired_note || '등장인물 목록에서 삭제되었습니다.'} 이미 회차에 기록이
+          남아 있어 문서는 그대로 두었습니다. 앞으로 쓰는 회차에는 등장하지 않습니다.
+        </p>
+      )}
 
       {/* 개요 */}
       <Panel
@@ -267,6 +276,7 @@ export function WikiSubject() {
         <SectionPanel
           key={section.key}
           section={section}
+          subjectType={page.subject_type}
           busy={busy}
           onEdit={() => openEditor(section)}
           onDelete={() => setDeletingSection(section)}
@@ -390,8 +400,25 @@ export function WikiSubject() {
 // One section
 // ==========================================================================
 
+/**
+ * What "지금 값" means depends on the page.
+ *
+ * On a character or a place it is what the model is told when the next chapter
+ * is written. On the work's own page it deliberately is not: the arc and the
+ * planned ending reach the stages that plan an episode and stop there, because
+ * a character who has read the ending stops being surprised by it. Saying the
+ * same sentence on both pages would be a lie on one of them — and the lie
+ * would discourage an author from writing the ending down at all.
+ */
+function currentValueHint(subjectType: SubjectType): string {
+  return subjectType === 'story'
+    ? '지금 값 — 회차를 기획할 때 참고하며, 인물과 본문 작성에는 전달되지 않습니다.'
+    : '지금 값 — 다음 회차를 쓸 때 AI가 보는 값입니다.'
+}
+
 function SectionPanel({
   section,
+  subjectType,
   busy,
   onEdit,
   onDelete,
@@ -399,6 +426,7 @@ function SectionPanel({
   onRestore,
 }: {
   section: WikiSection
+  subjectType: SubjectType
   busy: boolean
   onEdit: () => void
   onDelete: () => void
@@ -426,7 +454,7 @@ function SectionPanel({
           )}
           {!isLog && section.current && (
             <p className="mt-1 text-[0.7rem] text-ink-muted">
-              지금 값 — 다음 회차를 쓸 때 AI가 보는 값입니다.
+              {currentValueHint(subjectType)}
             </p>
           )}
         </div>

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from storyweaver.api import deps
-from storyweaver.wiki import record_character_edit
+from storyweaver.wiki import forget_subject, record_character_edit
 from storyweaver.models import CharacterProfile
 from storyweaver.ui.project import Project
 
@@ -80,16 +80,28 @@ def upsert_character(character: CharacterProfile) -> CharacterProfile:
 
 @router.delete("/{character_id}", response_model=list[CharacterProfile])
 def delete_character(character_id: str) -> list[CharacterProfile]:
-    """Delete a character, and every relationship pointing at them.
+    """Delete a character, every relationship pointing at them, and their page.
 
     Leaving dangling targets behind would put ids into prompts that no longer
-    resolve to anyone.
+    resolve to anyone — and leaving the wiki page behind would leave a person
+    in the wiki who is in no chapter and no cast.
+
+    What happens to the page depends on whether the story ever used them; see
+    `forget_subject`. Either way the chronicle is not silently rewritten around
+    them: an episode that recorded something about this character still did.
     """
     with deps.write_lock():
         project = deps.get_project()
-        deps.require_character(project, character_id)
+        character = deps.require_character(project, character_id)
         project.remove_character(character_id)
         deps.save_project(project)
+        memory = deps.get_memory()
+        if memory is not None:
+            forget_subject(
+                memory.chronicle, "character", character_id,
+                note=f"{character.name} — 작가가 등장인물에서 삭제했습니다.",
+                title=character.name,
+            )
     return project.characters
 
 

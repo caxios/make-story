@@ -434,7 +434,19 @@ export interface Health {
 // The wiki and its chronicle
 // ==========================================================================
 
-export type SubjectType = 'character' | 'world' | 'location' | 'rule' | 'faction'
+/**
+ * `story` is the work itself — its logline, arc and planned ending. It is
+ * deliberately not part of the world: the world summary reaches every
+ * character's prompt, and a character who has read the ending stops being
+ * surprised by it.
+ */
+export type SubjectType =
+  | 'story'
+  | 'character'
+  | 'world'
+  | 'location'
+  | 'rule'
+  | 'faction'
 export type EntrySource = 'author' | 'episode'
 export type SectionKind = 'stateful' | 'log'
 export type EntryKind =
@@ -485,6 +497,9 @@ export interface WikiPage {
   title: string
   summary: string
   sections: WikiSection[]
+  /** Deleted from the cast, but the story used them, so the page is kept. */
+  retired: boolean
+  retired_note: string
 }
 
 export interface WikiSubjectRow {
@@ -493,10 +508,89 @@ export interface WikiSubjectRow {
   title: string
   entry_count: number
   last_episode: number | null
+  retired: boolean
 }
 
 /** A chapter's proposed chronicle entries, none of which count yet. */
 export interface PendingReview {
   episode_number: number | null
   entries: ChronicleEntry[]
+}
+
+// ==========================================================================
+// The concept session — deciding what the novel is
+// ==========================================================================
+
+export interface ConceptCharacter {
+  name: string
+  role: string
+  age: number | null
+  gender: string | null
+  appearance: string
+  personality: string
+  speech: string
+  goal: string
+  secret: string
+  /** `"시월 — 경계하는 상대"`, naming only others in this same concept. */
+  relationships: string[]
+}
+
+export interface ConceptEpisode {
+  number: number
+  /** One or two sentences. Not a plan — each chapter is planned before it is written. */
+  line: string
+}
+
+/** One whole proposal: the unit the author picks and then refines. */
+export interface StoryConcept {
+  title: string
+  logline: string
+  genre: string
+  tone: string
+  era: string | null
+  premise: string
+  arc: string
+  ending: string
+  rules: string[]
+  locations: string[]
+  factions: string[]
+  characters: ConceptCharacter[]
+  episodes: ConceptEpisode[]
+}
+
+/** One round, kept so the author can look back — not replayed to the model. */
+export interface ConceptTurn {
+  turn: number
+  instruction: string
+  changed: string[]
+  created_at: string
+}
+
+export type ConceptStatus = 'proposing' | 'refining' | 'committed'
+
+export interface ConceptSession {
+  seed: string
+  status: ConceptStatus
+  proposals: StoryConcept[]
+  chosen: StoryConcept | null
+  turns: ConceptTurn[]
+  created_at: string
+  updated_at: string
+  committed_at: string | null
+}
+
+export interface ConceptSessionView {
+  session: ConceptSession | null
+  /** What the last round moved, worked out by comparing rather than asked of the model. */
+  changed: string[]
+}
+
+export interface ConceptCommitResult {
+  characters: string[]
+  rules: string[]
+  locations: string[]
+  episodes: number
+  chronicle_entries: number
+  /** Anything that could not be carried over, said plainly. */
+  dropped: string[]
 }

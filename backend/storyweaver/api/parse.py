@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field, StringConstraints, ValidationError
 
 from storyweaver import telemetry
 from storyweaver.api import deps
+from storyweaver.ids import slugify, unique_id
 from storyweaver.llm import get_llm
 from storyweaver.models import CharacterProfile, WorldLore
 from storyweaver.ui.project import Project
@@ -97,32 +98,11 @@ def _extract_json(text: str) -> str:
     return match.group(1).strip() if match else text.strip()
 
 
-def _slugify(value: str) -> str:
-    """A usable id, keeping Korean as it is rather than transliterating it.
-
-    Ids are matched exactly everywhere downstream — scenes, relationships,
-    memory — so what matters is that one is stable and has no spaces, not that
-    it is ASCII.
-    """
-    slug = re.sub(r"[\s_]+", "-", value.strip().lower())
-    slug = re.sub(r"[^\w가-힣-]", "", slug, flags=re.UNICODE)
-    return re.sub(r"-{2,}", "-", slug).strip("-")
-
-
-def _unique_id(proposed: str, fallback: str, taken: set[str]) -> str:
-    """An id that cannot collide with a character who already exists.
-
-    This matters more than it looks: saving a character upserts by id, so a
-    parsed profile that happened to reuse an id would overwrite someone.
-    """
-    base = _slugify(proposed) or _slugify(fallback) or "character"
-    if base not in taken:
-        return base
-    for suffix in range(2, 100):
-        candidate = f"{base}-{suffix}"
-        if candidate not in taken:
-            return candidate
-    return f"{base}-{len(taken) + 1}"
+# Both live in `storyweaver.ids` now: committing a concept mints ids for a whole
+# cast, and reaching into a route module for that would drag the whole FastAPI
+# app into the import graph.
+_slugify = slugify
+_unique_id = unique_id
 
 
 def _ask(prompt: str, schema: type[BaseModel], stage: str, what: str) -> BaseModel:

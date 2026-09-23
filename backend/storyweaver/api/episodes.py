@@ -16,6 +16,7 @@ from storyweaver.models import Episode, Scene, StoryBeat
 from storyweaver.models.style import PACING, PROSE_DENSITIES
 from storyweaver.api import deps
 from storyweaver.ui.project import Project
+from storyweaver.wiki import story_brief
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +130,7 @@ def _expand_summary(
     project: Project,
     story_so_far: str,
     prior_summaries: list[str],
+    brief: str = "",
 ) -> str:
     """Draw one line out into an outline the Director can decompose.
 
@@ -158,7 +160,9 @@ it in the language the author used, in clear and concise sentences.
 
 Do not invent characters or contradict the world and the cast below. Where the
 author's line is thin, develop it in the direction the story is already going
-rather than introducing something new.
+rather than introducing something new. Where the work's overall direction is
+given below, aim this episode at it — do not have anyone act on knowledge of
+the ending, and do not bring it forward.
 
 --- CAST ---
 {ctx.format_character_summaries(project.characters)}
@@ -240,6 +244,8 @@ def plan_all_episodes(
 
     story_so_far = _story_so_far(project)
     first_number = project.next_episode_number()
+    memory = deps.get_memory()
+    brief = story_brief(memory.chronicle) if memory is not None else ""
     # Outlines are approved by the author and become the storyline every later
     # stage reads, so they are drawn from the cast and world as the story has
     # left them, not as they were first written down.
@@ -256,6 +262,7 @@ def plan_all_episodes(
             project=project,
             story_so_far=story_so_far,
             prior_summaries=prior_summaries,
+            brief=brief,
         )
         results.append(
             ExpandedEpisodeSummary(
@@ -475,8 +482,13 @@ def draft_plan(episode_number: int) -> dict:
     folded = deps.folded_project(project)
 
     memory_context = ""
+    brief = ""
     if memory is not None:
         memory_context = memory.build_director_context(folded.character_map(), episode)
+        # Where the whole work is going. Rule 2 has the Director build a sparse
+        # storyline into a full episode, and doing that blind to the arc drifts
+        # off it one chapter at a time.
+        brief = story_brief(memory.chronicle)
 
     try:
         scenes = director.decompose_episode(
@@ -484,6 +496,7 @@ def draft_plan(episode_number: int) -> dict:
             folded.world,
             folded.character_map(),
             memory_context=memory_context,
+            story_brief=brief,
         )
     except Exception as error:  # noqa: BLE001 — reported to the author
         raise HTTPException(

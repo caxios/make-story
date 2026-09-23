@@ -83,5 +83,17 @@ Era: {world_era}
 ## What The Story Has Established So Far
 {memory_context}
 
+## Where The Whole Work Is Going
+{story_brief}
+
+Steer by this. Rule 2 has you build a sparse storyline into a full episode, and
+an episode built without knowing where the work is headed drifts off the arc —
+reasonably, one chapter at a time, until it is somewhere the author never
+chose.
+
+This is direction, not material. Do not have anyone act on knowledge of the
+ending, do not foreshadow it deliberately, and do not bring events forward
+because you can see them coming. The characters have not read this.
+
 ## The Author's Storyline For This Episode
 {author_storyline}

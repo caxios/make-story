@@ -30,6 +30,9 @@ STAGE_TEMPERATURES = {
     # Drawing a one-line summary out into an episode outline. Warmer than
     # parsing, cooler than prose: it is inventing structure, not sentences.
     "planner": 0.6,
+    # Inventing a story from nothing. The warmest stage in the app, and the
+    # only one whose job is to originate rather than to transform.
+    "concept": 0.9,
     "titler": 0.5,
     "transition": config.TEMPERATURE,
 }

@@ -81,7 +81,28 @@ FACTION_SECTIONS: list[SectionSpec] = [
     SectionSpec(key="events", title="작중 행적", kind="log", order=20),
 ]
 
+# The work itself: what it is about, where it is going, and how it is meant to
+# end. There is no typed model behind any of this, so every section is prose —
+# and that is the point. An arc is a plan, not a setting, and the moment it is
+# stored as world lore it reaches every character's prompt (see `SubjectType`).
+#
+# `STORY_SUBJECT_ID` is a constant the way the world's is: there is one work.
+STORY_SUBJECT_ID = "story"
+
+STORY_SECTIONS: list[SectionSpec] = [
+    SectionSpec(key="logline", title="로그라인", order=10),
+    SectionSpec(key="premise", title="기획 의도", order=20),
+    SectionSpec(key="arc", title="전체 아크", order=30),
+    SectionSpec(key="ending", title="계획된 결말", order=40),
+    # Rough, one line per episode, at the resolution the arc needs. The detailed
+    # plan for a chapter is made just before it is written and approved then.
+    SectionSpec(key="episodes", title="회차 구상", kind="log", order=50),
+    # How the concept came to be: what was asked for, and what changed.
+    SectionSpec(key="decisions", title="기획 기록", kind="log", order=60),
+]
+
 SECTIONS_BY_TYPE: dict[SubjectType, list[SectionSpec]] = {
+    "story": STORY_SECTIONS,
     "character": CHARACTER_SECTIONS,
     "world": WORLD_SECTIONS,
     "location": LOCATION_SECTIONS,
@@ -116,6 +137,8 @@ def bound_field_for(subject_type: SubjectType, section_key: str) -> str | None:
 
 __all__ = [
     "CHARACTER_SECTIONS",
+    "STORY_SECTIONS",
+    "STORY_SUBJECT_ID",
     "FACTION_SECTIONS",
     "LOCATION_SECTIONS",
     "RELATIONSHIP_PREFIX",

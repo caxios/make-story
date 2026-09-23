@@ -209,6 +209,10 @@ export function CharacterWorkshop() {
   const [parseText, setParseText] = useState('')
   const [parsing, setParsing] = useState(false)
 
+  // Edit-mode choice: when clicking edit on an existing character, show a
+  // modal that lets the author pick between free-text rewrite vs form edit.
+  const [editModeTarget, setEditModeTarget] = useState<CharacterProfile | null>(null)
+
   const characters = useMemo(() => project?.characters ?? [], [project])
 
   // The graph is derived server-side, so it is fetched rather than computed —
@@ -254,6 +258,46 @@ export function CharacterWorkshop() {
     } finally {
       setParsing(false)
     }
+  }
+
+  // Rewrite: the author describes the character again in free text, and the
+  // result replaces the existing profile (keeping the same id).
+  const [rewriteText, setRewriteText] = useState('')
+  const [rewriting, setRewriting] = useState(false)
+  const [rewriteOpen, setRewriteOpen] = useState(false)
+
+  const startRewrite = (character: CharacterProfile) => {
+    setEditModeTarget(null)
+    setRewriteOpen(true)
+    setRewriteText('')
+    // Store who we are rewriting so we can keep the same id
+    setEditing(character)
+  }
+
+  const rewrite = async () => {
+    if (!rewriteText.trim() || !editing) return
+    setRewriting(true)
+    try {
+      const parsed = await api.parseCharacter(
+        rewriteText.trim(),
+        characters.filter((c) => c.id !== editing.id).map((c) => c.id),
+      )
+      // Keep the original id so the character is updated, not duplicated.
+      setEditing({ ...parsed, id: editing.id })
+      setIsNew(false)
+      setRewriteOpen(false)
+      setRewriteText('')
+    } catch (cause) {
+      fromError(cause, '설명에서 캐릭터를 읽어내지 못했습니다.')
+    } finally {
+      setRewriting(false)
+    }
+  }
+
+  const openFormEdit = (character: CharacterProfile) => {
+    setEditModeTarget(null)
+    setEditing(character)
+    setIsNew(false)
   }
 
   const remove = async (character: CharacterProfile) => {
@@ -317,10 +361,7 @@ export function CharacterWorkshop() {
               <CharacterCard
                 key={character.id}
                 character={character}
-                onEdit={() => {
-                  setEditing(character)
-                  setIsNew(false)
-                }}
+                onEdit={() => setEditModeTarget(character)}
                 onClone={() => setCloning(character)}
                 onDelete={() => setDeleting(character)}
                 onWiki={() =>
@@ -350,10 +391,7 @@ export function CharacterWorkshop() {
                 graph={graph}
                 onSelect={(id) => {
                   const found = characters.find((character) => character.id === id)
-                  if (found) {
-                    setEditing(found)
-                    setIsNew(false)
-                  }
+                  if (found) setEditModeTarget(found)
                 }}
               />
               <p className="mt-4 text-center text-xs text-ink-muted">
@@ -407,8 +445,76 @@ export function CharacterWorkshop() {
         />
       </Modal>
 
+      {/* Edit mode choice: free-text rewrite or structured form */}
+      <Modal
+        open={editModeTarget !== null}
+        onClose={() => setEditModeTarget(null)}
+        title={`'${editModeTarget?.name}' 수정 방식`}
+        description="자유 텍스트로 처음부터 다시 쓸 수도 있고, 항목별로 직접 수정할 수도 있습니다."
+      >
+        <div className="flex flex-col gap-3 pt-2">
+          <button
+            className="sw-panel flex items-start gap-3 p-4 text-left transition-colors hover:border-line-strong"
+            onClick={() => editModeTarget && startRewrite(editModeTarget)}
+          >
+            <Sparkles size={20} className="mt-0.5 shrink-0 text-accent" />
+            <div>
+              <p className="text-sm font-semibold text-ink">자유 텍스트로 다시 쓰기</p>
+              <p className="mt-1 text-xs text-ink-muted">
+                처음 캐릭터를 추가할 때처럼 자유롭게 설명하면, AI가 읽어서 캐릭터 시트를 다시 채워 드립니다.
+              </p>
+            </div>
+          </button>
+          <button
+            className="sw-panel flex items-start gap-3 p-4 text-left transition-colors hover:border-line-strong"
+            onClick={() => editModeTarget && openFormEdit(editModeTarget)}
+          >
+            <Pencil size={20} className="mt-0.5 shrink-0 text-ink-muted" />
+            <div>
+              <p className="text-sm font-semibold text-ink">폼에서 직접 수정</p>
+              <p className="mt-1 text-xs text-ink-muted">
+                이름, 성격, 관계 등 각 항목을 개별적으로 수정합니다.
+              </p>
+            </div>
+          </button>
+        </div>
+      </Modal>
+
+      {/* Free-text rewrite modal for existing characters */}
+      <Modal
+        open={rewriteOpen}
+        onClose={() => { setRewriteOpen(false); setRewriteText('') }}
+        title={`'${editing?.name}' 다시 쓰기`}
+        description="이 캐릭터를 처음부터 다시 설명해 주세요. 기존 설정이 새로 읽어낸 내용으로 교체됩니다. 읽어낸 결과는 바로 저장되지 않고 캐릭터 시트에서 확인 후 저장합니다."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => { setRewriteOpen(false); setRewriteText('') }} disabled={rewriting}>
+              취소
+            </Button>
+            <Button
+              variant="primary"
+              icon={Sparkles}
+              loading={rewriting}
+              disabled={!rewriteText.trim() || rewriting}
+              onClick={() => void rewrite()}
+            >
+              {rewriting ? '읽는 중…' : '설명에서 불러오기'}
+            </Button>
+          </>
+        }
+      >
+        <TextArea
+          label="인물 설명"
+          hint="읽어낸 내용은 바로 저장되지 않습니다. 캐릭터 시트가 열리면 확인하고 고친 뒤 저장하세요."
+          rows={9}
+          placeholder={'이 캐릭터를 자유롭게 다시 설명해 주세요. 이름, 나이, 외모, 성격, 말투, 관계, 목표, 비밀 등을 적어 주시면 됩니다.'}
+          value={rewriteText}
+          onChange={(event) => setRewriteText(event.target.value)}
+        />
+      </Modal>
+
       <CharacterDrawer
-        character={editing}
+        character={editing && !rewriteOpen ? editing : null}
         isNew={isNew}
         cast={characters}
         onClose={() => setEditing(null)}

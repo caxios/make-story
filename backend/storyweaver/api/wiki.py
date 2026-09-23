@@ -31,6 +31,7 @@ from storyweaver.models.chronicle import (
 )
 from storyweaver.ui.project import Project
 from storyweaver.wiki import (
+    STORY_SUBJECT_ID,
     current_value,
     relationship_section_key,
     relationship_target,
@@ -75,6 +76,9 @@ class SubjectPage(BaseModel):
     title: str
     summary: str = ""
     sections: list[SectionView] = Field(default_factory=list)
+    # Deleted from the cast, but kept because the story used them.
+    retired: bool = False
+    retired_note: str = ""
 
 
 class SubjectRow(BaseModel):
@@ -83,6 +87,7 @@ class SubjectRow(BaseModel):
     title: str
     entry_count: int = 0
     last_episode: int | None = None
+    retired: bool = False
 
 
 class SummaryUpdate(BaseModel):
@@ -131,6 +136,17 @@ def _subject(project: Project, subject_type: SubjectType, subject_id: str) -> ob
 
 
 def _title(project: Project, subject_type: SubjectType, subject_id: str) -> str:
+    # The work's own page is named after the work. `world.title` is what the
+    # novel is called; `project.name` is what the author called the folder it
+    # lives in, and after a concept is committed the two diverge — the page
+    # would otherwise show a stale label while the header showed the real one.
+    if subject_type == "story":
+        return (
+            project.world.title.strip()
+            or project.name.strip()
+            or "작품 기획"
+        )
+
     base = _subject(project, subject_type, subject_id)
     for attribute in ("name", "title"):
         value = getattr(base, attribute, None)
@@ -259,6 +275,8 @@ def _build_page(project: Project, subject_type: SubjectType, subject_id: str) ->
         title=saved.title or _title(project, subject_type, subject_id),
         summary=saved.summary,
         sections=views,
+        retired=saved.retired,
+        retired_note=saved.retired_note,
     )
 
 
@@ -281,6 +299,9 @@ def list_subjects(project: Project = Depends(deps.get_project)) -> list[SubjectR
         counts.setdefault((entry.subject_type, entry.subject_id), []).append(entry)
 
     known: list[tuple[SubjectType, str]] = [
+        # The work itself comes first: it is where an author looks to remember
+        # what the novel was supposed to be.
+        ("story", STORY_SUBJECT_ID),
         ("world", "world"),
         *(("character", c.id) for c in project.characters),
         *(("location", l.id) for l in project.world.locations),
@@ -292,15 +313,17 @@ def list_subjects(project: Project = Depends(deps.get_project)) -> list[SubjectR
 
     rows = []
     for subject_type, subject_id in known:
+        saved = store.get_wiki_subject(subject_type, subject_id)
         entries = counts.get((subject_type, subject_id), [])
         episodes = [e.episode_number for e in entries if e.episode_number is not None]
         rows.append(
             SubjectRow(
                 subject_type=subject_type,
                 subject_id=subject_id,
-                title=_title(project, subject_type, subject_id),
+                title=saved.title or _title(project, subject_type, subject_id),
                 entry_count=len(entries),
                 last_episode=max(episodes) if episodes else None,
+                retired=saved.retired,
             )
         )
     return rows

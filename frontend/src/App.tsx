@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/components/AppLayout'
 import { ToastProvider } from '@/components/ToastContext'
 import { CharacterWorkshop } from '@/pages/CharacterWorkshop'
+import { ConceptStudio } from '@/pages/ConceptStudio'
 import { Dashboard } from '@/pages/Dashboard'
 import { EpisodeQueue } from '@/pages/EpisodeQueue'
 import { MemoryInspector } from '@/pages/MemoryInspector'
@@ -22,6 +23,7 @@ export default function App() {
           <Routes>
             <Route element={<AppLayout />}>
               <Route index element={<Dashboard />} />
+              <Route path="concept" element={<ConceptStudio />} />
               <Route path="world" element={<WorldBuilder />} />
               <Route path="characters" element={<CharacterWorkshop />} />
               <Route path="planner" element={<StoryPlanner />} />

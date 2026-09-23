@@ -1,6 +1,15 @@
 """Core Pydantic data models for StoryWeaver."""
 
 from storyweaver.models.character import CharacterProfile, Relationship, Trait
+from storyweaver.models.concept import (
+    ConceptCharacter,
+    ConceptEpisode,
+    ConceptOutline,
+    ConceptProposals,
+    ConceptSession,
+    ConceptTurn,
+    StoryConcept,
+)
 from storyweaver.models.chronicle import (
     ChronicleEntry,
     EntryKind,
@@ -26,6 +35,13 @@ __all__ = [
     "Relationship",
     "Trait",
     "ChronicleEntry",
+    "ConceptCharacter",
+    "ConceptEpisode",
+    "ConceptOutline",
+    "ConceptProposals",
+    "ConceptSession",
+    "ConceptTurn",
+    "StoryConcept",
     "EntryKind",
     "EntrySource",
     "SectionKind",

@@ -15,6 +15,7 @@ import {
   ClipboardList,
   Feather,
   Home,
+  Lightbulb,
   ListOrdered,
   Menu,
   Settings,
@@ -36,6 +37,8 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: '/', label: '대시보드', icon: Home },
+  // First, because on an empty project it is where a novel starts.
+  { to: '/concept', label: '작품 기획', icon: Lightbulb },
   { to: '/world', label: '세계관 빌더', icon: BookOpen },
   { to: '/characters', label: '캐릭터 워크숍', icon: Users },
   { to: '/planner', label: '스토리 플래너', icon: ClipboardList },

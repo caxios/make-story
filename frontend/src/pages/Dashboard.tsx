@@ -7,6 +7,7 @@ import {
   BookOpen,
   CheckCircle2,
   FileText,
+  Lightbulb,
   Plus,
   Sparkles,
   Spline,
@@ -52,9 +53,26 @@ export function Dashboard() {
         <p className="mt-1 text-sm text-ink-dim">
           {project.world.overview.trim()
             ? [project.world.genre, project.world.tone].filter(Boolean).join(' · ')
-            : '세계관 설정이 아직 없습니다 — 세계관 빌더에서 시작해 보세요.'}
+            : '아직 아무것도 정해지지 않았습니다.'}
         </p>
       </div>
+
+      {/* An empty project has one useful next step, and it is not a form. */}
+      {!project.world.overview.trim() && project.characters.length === 0 && (
+        <Panel
+          title="무엇을 쓸지부터 정해 보세요"
+          description="어떤 소설인지 아직 정하지 않으셨다면, AI와 함께 컨셉부터 잡을 수 있습니다. 제안을 받고, 하나를 골라, 만족할 때까지 다듬으면 세계관과 인물과 회차 구상이 한 번에 만들어집니다."
+        >
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" icon={Lightbulb} onClick={() => navigate('/concept')}>
+              작품 기획 시작하기
+            </Button>
+            <Button icon={BookOpen} onClick={() => navigate('/world')}>
+              이미 구상이 있습니다 — 직접 적을게요
+            </Button>
+          </div>
+        </Panel>
+      )}
 
       {/* --- The numbers --- */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

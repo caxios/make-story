@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 # 4,500–5,500 characters. Five scenes at that length overruns; two under-runs.
 DEFAULT_MIN_SCENES = 3
 DEFAULT_MAX_SCENES = 4
+NO_STORY_BRIEF = "(아직 정해진 전체 구상이 없습니다 — 이 화의 줄거리만 보고 구성하세요)"
 NO_MEMORY = "(this is the first episode — nothing has been established yet)"
 
 
@@ -55,6 +56,7 @@ def build_prompt(
     min_scenes: int = DEFAULT_MIN_SCENES,
     max_scenes: int = DEFAULT_MAX_SCENES,
     memory_context: str = "",
+    story_brief: str = "",
 ) -> str:
     """Render the Director prompt. Exposed separately so it can be inspected and tested."""
     char_map = context.as_character_map(characters)
@@ -72,6 +74,10 @@ def build_prompt(
         locations=context.format_locations(world.locations),
         characters=context.format_character_summaries(list(char_map.values())),
         author_storyline=episode.author_storyline,
+        # Where the whole work is going. The planning stages get this; the
+        # Character Agent, the Writer and the Lore Checker must not — a
+        # character who has read the ending stops being surprised by it.
+        story_brief=story_brief or NO_STORY_BRIEF,
     )
 
 
@@ -141,13 +147,16 @@ def decompose_episode(
     min_scenes: int = DEFAULT_MIN_SCENES,
     max_scenes: int = DEFAULT_MAX_SCENES,
     memory_context: str = "",
+    story_brief: str = "",
 ) -> list[Scene]:
     """Break `episode.author_storyline` into ordered, validated `Scene`s."""
     char_map = context.as_character_map(characters)
     if not char_map:
         raise ValueError("decompose_episode needs at least one character profile")
 
-    prompt = build_prompt(episode, world, char_map, min_scenes, max_scenes, memory_context)
+    prompt = build_prompt(
+        episode, world, char_map, min_scenes, max_scenes, memory_context, story_brief
+    )
     model = telemetry.meter(llm or get_llm(stage="director"), "director")
     output = model.with_structured_output(DirectorOutput).invoke(prompt)
     return _to_scenes(output.scenes, world, char_map)

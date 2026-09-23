@@ -21,7 +21,13 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 # Everything the wiki can hold a page for.
-SubjectType = Literal["character", "world", "location", "rule", "faction"]
+#
+# `story` is the work itself — its logline, its premise, the arc it is meant to
+# travel and where it is meant to land. It is deliberately not part of the
+# world: `context.format_world_summary` is rendered into five prompts, so a
+# planned ending stored on the world page would reach every character, and they
+# would play their scenes already knowing how it ends.
+SubjectType = Literal["story", "character", "world", "location", "rule", "faction"]
 
 # Who wrote the entry. Author entries carry no episode number: they happen at
 # the point in the story the author is standing at, not inside a chapter.
@@ -134,6 +140,12 @@ class WikiSubject(BaseModel):
     title: str = ""
     summary: str = ""               # the 개요 paragraph at the top of the page
     free_sections: list[SectionSpec] = Field(default_factory=list)
+    # Deleted from the cast, but they were in the story. Their page stays as a
+    # record: that someone was written out is part of what happened. A subject
+    # deleted before ever appearing in a chapter is removed outright instead —
+    # a concept-stage mistake is not history.
+    retired: bool = False
+    retired_note: str = ""
 
     def section(self, key: str) -> SectionSpec | None:
         return next((s for s in self.free_sections if s.key == key), None)

@@ -6,7 +6,15 @@
  * 설정이야말로 작가가 찾고 싶어 하는 것일 때가 많기 때문이다.
  */
 
-import { BookMarked, BookOpen, MapPin, Scale, ScrollText, Users } from 'lucide-react'
+import {
+  BookMarked,
+  BookOpen,
+  Lightbulb,
+  MapPin,
+  Scale,
+  ScrollText,
+  Users,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -18,6 +26,8 @@ import { cn } from '@/lib/cn'
 import type { SubjectType, WikiSubjectRow } from '@/types/storyweaver'
 
 const GROUPS: { type: SubjectType; label: string; icon: typeof Users }[] = [
+  // The work itself first: it is what an author opens the wiki to remember.
+  { type: 'story', label: '작품', icon: Lightbulb },
   { type: 'character', label: '인물', icon: Users },
   { type: 'world', label: '세계관', icon: BookOpen },
   { type: 'location', label: '장소', icon: MapPin },
@@ -149,6 +159,7 @@ export function Wiki() {
                         {row.title}
                       </span>
                       <span className="mt-1 flex items-center gap-1.5 text-xs text-ink-muted">
+                        {row.retired && <Badge tone="neutral">삭제된 인물</Badge>}
                         {row.entry_count > 0 ? (
                           <>
                             <Badge tone="accent">기록 {row.entry_count}건</Badge>

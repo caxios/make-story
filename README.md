@@ -29,12 +29,35 @@ cd frontend && npm install && cd ..
 python scripts/dev.py              # backend on :8001, the studio on :5173
 ```
 
-Get a key at <https://aistudio.google.com/apikey>. Wait for `✅ Both servers are
-running!` — the backend loads its memory store first, and a generation started
-before that is refused.
+Get a key at <https://aistudio.google.com/apikey>.
 
-Open <http://localhost:5173>, write an outline in **📝 에피소드 큐**, press
-**기획서 만들기**, check the layout, and approve it.
+## Starting it
+
+Everything after the first time, from the project root:
+
+```bash
+start.bat                                # Windows — double-click it, or run it
+.venv\Scripts\python.exe scripts\dev.py  # the same thing, spelled out
+python scripts/dev.py                    # POSIX, or with the venv activated
+```
+
+One command brings up both halves: the backend on `:8001` and the studio on
+`:5173`. Wait for `✅ Both servers are running!` before opening
+<http://localhost:5173> — the backend loads its memory store first, and a
+generation started before that is refused.
+
+On a fresh project the order is:
+
+1. **🌍 세계관 빌더** opens on **빠른 설정**, because the world is empty. Describe
+   the setting in a paragraph and it fills in the title, genre, tone, rules and
+   places.
+2. **👤 캐릭터 워크숍 → 캐릭터 추가** — describe a character in your own words, or
+   fill the sheet in by hand.
+3. **📋 스토리 플래너** — one line per episode, expanded into outlines you approve.
+4. **📝 에피소드 큐 → 기획서 만들기** — check the scene layout, approve it, generate.
+5. When the chapter is done you are shown **what it recorded** about the cast and
+   the world. Only what you accept reaches the next chapter.
+6. **📖 위키** — every setting, and the history of how it got that way.
 
 `python scripts/dev.py --reload` restarts the backend when you edit it. It is
 off by default because a restart interrupts whatever is being written.
@@ -107,7 +130,7 @@ Generation reports real progress, driven by the pipeline itself:
 ## Command line
 
 ```bash
-pytest                                        # 663 tests, no API key and no network (enforced, not assumed)
+pytest                                        # 782 tests, no API key and no network (enforced, not assumed)
 python -m storyweaver.smoke_test              # is the model binding working?
 python -m storyweaver.demo_scene --two        # one scene, printed
 python -m storyweaver.demo_episode --memory   # one episode, with continuity

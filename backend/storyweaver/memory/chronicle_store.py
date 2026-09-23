@@ -388,6 +388,31 @@ class ChronicleStore:
             logger.info("Dropped %d chronicle entries for episode %d", removed, episode_number)
         return removed
 
+    def drop_subject(self, subject_type: SubjectType, subject_id: str) -> int:
+        """Delete a subject's whole history, and its page. Returns how many.
+
+        For a subject that never made it into a chapter — a character invented
+        while concepting and cut before episode one. Keeping their page would
+        bury the wiki in people who were never in the story.
+
+        Anyone the story actually used is retired instead, not dropped: that
+        they were written out is itself part of the record.
+        """
+        path = self.subject_path(subject_type, subject_id)
+        removed = len(self._read(path))
+        path.unlink(missing_ok=True)
+        self.wiki_path(subject_type, subject_id).unlink(missing_ok=True)
+        if removed:
+            logger.info("Dropped %d chronicle entries for %s %r", removed, subject_type, subject_id)
+        return removed
+
+    def episode_entries(self, subject_type: SubjectType, subject_id: str) -> int:
+        """How much of this subject's history the story itself wrote."""
+        return sum(
+            1 for entry in self.subject(subject_type, subject_id)
+            if entry.source == "episode"
+        )
+
     def renumber(self, mapping: dict[int, int | None]) -> int:
         """Follow the queue's renumbering. Returns how many entries moved.
 
