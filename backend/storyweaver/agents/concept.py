@@ -20,12 +20,15 @@ author needs to know what it actually did.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 
 from storyweaver import telemetry
 from storyweaver.agents.prompts import render_prompt
+from storyweaver.agents.writer import _unwrap_content_blocks
 from storyweaver.llm import get_llm
 from storyweaver.models.concept import (
     ConceptCharacter,
+    ConceptMessage,
     ConceptOutline,
     ConceptProposals,
     StoryConcept,
@@ -155,6 +158,100 @@ def outline(
     if not result.episodes:
         raise ValueError("The concept agent returned an empty outline")
     return _tidy(concept.model_copy(update={"episodes": result.episodes}))
+
+
+# ---------------------------------------------------------------------------
+# Working it out by talking
+# ---------------------------------------------------------------------------
+
+# How many messages of the conversation the model is shown. This is the one
+# place in the concept stage that replays a transcript, so it is the one place
+# whose cost grows with use — a conversation that forgets what was said two
+# lines ago is not a conversation, so there is no way around replaying it,
+# only a limit on how far back.
+#
+# The oldest messages are dropped rather than summarised: a summary of the
+# early conversation would be the model's account of what the author decided,
+# and that account would then be treated as the decision itself.
+TRANSCRIPT_WINDOW = 40
+
+AUTHOR_LABEL = "작가"
+AI_LABEL = "AI"
+
+OPENING = "(아직 아무 말도 오가지 않았습니다. 작가에게 먼저 말을 거세요.)"
+
+
+def format_transcript(messages: Sequence[ConceptMessage], window: int = TRANSCRIPT_WINDOW) -> str:
+    """The conversation as the model reads it, oldest kept message first."""
+    kept = list(messages)[-window:] if window > 0 else list(messages)
+    if not kept:
+        return OPENING
+
+    lines = []
+    if len(messages) > len(kept):
+        lines.append(f"(앞의 {len(messages) - len(kept)}개 대화는 생략되었습니다)\n")
+    for message in kept:
+        label = AUTHOR_LABEL if message.role == "author" else AI_LABEL
+        lines.append(f"{label}: {message.text.strip()}")
+    return "\n\n".join(lines)
+
+
+def build_talk_prompt(messages: Sequence[ConceptMessage]) -> str:
+    return render_prompt("concept_talk", transcript=format_transcript(messages))
+
+
+def reply_text(result: object) -> str:
+    """The words out of a message, whatever shape the reply arrived in.
+
+    Gemini answers with a list of content blocks rather than a string, and
+    `str()` on that list puts `[{'type': 'text', 'text': '…'}]` — signature
+    blobs and all — straight in front of the author. The Writer has met this
+    already; `_unwrap_content_blocks` is the same repair, reused rather than
+    written twice.
+    """
+    content = getattr(result, "content", result)
+    if isinstance(content, list):
+        parts = [
+            block.get("text", "") if isinstance(block, dict) else str(block)
+            for block in content
+        ]
+        return "\n\n".join(part for part in parts if part.strip()).strip()
+    return _unwrap_content_blocks(str(content)).strip()
+
+
+def talk(messages: Sequence[ConceptMessage], llm=None) -> str:
+    """One reply in the conversation. Plain prose, not a structure.
+
+    Deliberately unstructured. Asked for a schema the model fills every field,
+    and filling every field is exactly what this stage must not do — the point
+    is the half-formed thought the author can push back on.
+    """
+    prompt = build_talk_prompt(messages)
+    model = telemetry.meter(llm or get_llm(stage="concept"), "concept")
+    reply = reply_text(model.invoke(prompt))
+
+    if not reply:
+        raise ValueError("The concept agent returned an empty reply")
+    return reply
+
+
+def build_distill_prompt(messages: Sequence[ConceptMessage]) -> str:
+    return render_prompt("concept_distill", transcript=format_transcript(messages, window=0))
+
+
+def distill(messages: Sequence[ConceptMessage], llm=None) -> StoryConcept:
+    """Write the conversation down as the concept it arrived at.
+
+    The whole transcript is sent, not the window: this call happens once, and
+    dropping the opening of a conversation here would drop the premise.
+    """
+    if not any(message.role == "author" for message in messages):
+        raise ValueError("There is no conversation to build a concept from")
+
+    prompt = build_distill_prompt(messages)
+    model = telemetry.meter(llm or get_llm(stage="concept"), "concept")
+    concept: StoryConcept = model.with_structured_output(StoryConcept).invoke(prompt)
+    return _tidy(concept)
 
 
 # ---------------------------------------------------------------------------
@@ -331,13 +428,20 @@ def describe_changes(before: StoryConcept, after: StoryConcept) -> list[str]:
 __all__ = [
     "DEFAULT_COUNT",
     "DEFAULT_EPISODES",
+    "TRANSCRIPT_WINDOW",
+    "build_distill_prompt",
     "build_outline_prompt",
     "build_propose_prompt",
     "build_refine_prompt",
+    "build_talk_prompt",
     "describe_changes",
+    "distill",
+    "format_transcript",
     "is_whole",
     "missing_parts",
     "outline",
     "propose",
     "refine",
+    "reply_text",
+    "talk",
 ]

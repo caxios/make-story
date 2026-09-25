@@ -96,6 +96,26 @@ class ConceptOutline(BaseModel):
     episodes: list[ConceptEpisode]
 
 
+MessageRole = Literal["author", "ai"]
+
+
+class ConceptMessage(BaseModel):
+    """One line of the conversation, when the author works it out by talking.
+
+    The spread of three proposals answers "show me something"; this answers
+    "let's figure it out". It is the one place in the app where the transcript
+    *is* the state, so unlike a refinement it does get replayed to the model —
+    a conversation that forgets what was said two lines ago is not one.
+
+    That makes it the only part of the concept stage whose cost grows, which is
+    why replies are kept short and the transcript is capped.
+    """
+
+    role: MessageRole
+    text: str
+    created_at: datetime = Field(default_factory=_now)
+
+
 class ConceptTurn(BaseModel):
     """One round of the session, kept so the author can look back at it.
 
@@ -109,7 +129,10 @@ class ConceptTurn(BaseModel):
     created_at: datetime = Field(default_factory=_now)
 
 
-ConceptStatus = Literal["proposing", "refining", "committed"]
+# `talking` is a session that has a conversation and nothing else yet. It
+# becomes `refining` the moment that conversation is distilled into a
+# concept, and from there the two paths are the same.
+ConceptStatus = Literal["talking", "proposing", "refining", "committed"]
 
 
 class ConceptSession(BaseModel):
@@ -119,6 +142,9 @@ class ConceptSession(BaseModel):
     status: ConceptStatus = "proposing"
     proposals: list[StoryConcept] = Field(default_factory=list)
     chosen: StoryConcept | None = None
+    # Kept after the concept is distilled, and after it is committed: how a
+    # book was arrived at is worth as much as what was arrived at.
+    messages: list[ConceptMessage] = Field(default_factory=list)
     turns: list[ConceptTurn] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
@@ -130,11 +156,13 @@ class ConceptSession(BaseModel):
 
 __all__ = [
     "ConceptCharacter",
+    "ConceptMessage",
     "ConceptEpisode",
     "ConceptOutline",
     "ConceptProposals",
     "ConceptSession",
     "ConceptStatus",
     "ConceptTurn",
+    "MessageRole",
     "StoryConcept",
 ]

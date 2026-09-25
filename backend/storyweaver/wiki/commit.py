@@ -91,6 +91,7 @@ def commit_concept(
     chronicle: ChronicleStore | None,
     concept: StoryConcept,
     turns: list | None = None,
+    messages: list | None = None,
 ) -> CommitReport:
     """Write an agreed concept into `project` and the chronicle.
 
@@ -220,6 +221,25 @@ def commit_concept(
         # How the concept came to be. Without this the arc arrives looking like
         # it was always obvious, and the author loses the reasoning they spent
         # an afternoon on.
+        #
+        # The conversation first, where there was one, because it came first:
+        # for a concept worked out by talking, the reasoning *is* the
+        # conversation, and the refinement turns that follow are footnotes to
+        # it. Kept line by line rather than summarised — each line is then its
+        # own chronicle entry the author can edit or retract, and a summary
+        # would be the model's account of what they decided.
+        for message in messages or []:
+            text = getattr(message, "text", "").strip()
+            if not text:
+                continue
+            speaker = "작가" if getattr(message, "role", "") == "author" else "AI"
+            chronicle.record(
+                "story", STORY_SUBJECT_ID, "decisions",
+                f"[대화] {speaker}: {text}",
+                source="author", section_kind="log",
+            )
+            report.entries += 1
+
         for turn in turns or []:
             if getattr(turn, "instruction", "").strip():
                 chronicle.record(

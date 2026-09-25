@@ -48,6 +48,12 @@ generation started before that is refused.
 
 On a fresh project the order is:
 
+0. **💡 작품 기획** — if you have no story yet, start here and the world, the
+   cast, the arc and a rough line per chapter are all written for you. Two ways
+   in: take three finished concepts and pick one, or open **대화하며 함께
+   기획하기** and work it out a message at a time. Either way it lands in the
+   wiki as the first entry in each chain, so all of it stays editable. Skip
+   this if you already know what you are writing.
 1. **🌍 세계관 빌더** opens on **빠른 설정**, because the world is empty. Describe
    the setting in a paragraph and it fills in the title, genre, tone, rules and
    places.
@@ -130,7 +136,7 @@ Generation reports real progress, driven by the pipeline itself:
 ## Command line
 
 ```bash
-pytest                                        # 782 tests, no API key and no network (enforced, not assumed)
+pytest                                        # 809 tests, no API key and no network (enforced, not assumed)
 python -m storyweaver.smoke_test              # is the model binding working?
 python -m storyweaver.demo_scene --two        # one scene, printed
 python -m storyweaver.demo_episode --memory   # one episode, with continuity

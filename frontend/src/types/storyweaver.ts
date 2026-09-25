@@ -566,13 +566,21 @@ export interface ConceptTurn {
   created_at: string
 }
 
-export type ConceptStatus = 'proposing' | 'refining' | 'committed'
+export type ConceptStatus = 'talking' | 'proposing' | 'refining' | 'committed'
+
+/** One line of the conversation, when the author works the concept out by talking. */
+export interface ConceptMessage {
+  role: 'author' | 'ai'
+  text: string
+  created_at: string
+}
 
 export interface ConceptSession {
   seed: string
   status: ConceptStatus
   proposals: StoryConcept[]
   chosen: StoryConcept | null
+  messages: ConceptMessage[]
   turns: ConceptTurn[]
   created_at: string
   updated_at: string

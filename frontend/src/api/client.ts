@@ -477,6 +477,36 @@ export const refineConcept = (instruction: string) =>
     body: { instruction },
   })
 
+/**
+ * Say one thing in the concept conversation, and get one thing back.
+ *
+ * The other way in hands the author three finished concepts to pick from.
+ * This one starts from nothing, which is what an author who cannot yet answer
+ * "what do you want to write?" actually needs. The message is saved before the
+ * model is called, so a failed call never costs what they typed.
+ */
+export const talkConcept = (message: string) =>
+  request<ConceptSessionView>('/api/concept/talk', {
+    method: 'POST',
+    body: { message },
+  })
+
+/**
+ * Write the conversation down as a concept, and refine it from there.
+ *
+ * `episodes` of 0 leaves the chapter outline undrawn — a second model call the
+ * author may well want to spend after reshaping the concept, not before.
+ */
+export const buildConceptFromTalk = (episodes = 0) =>
+  request<ConceptSessionView>('/api/concept/talk/build', {
+    method: 'POST',
+    body: { episodes },
+  })
+
+/** Throw the conversation away, keeping whatever it already produced. */
+export const clearConceptTalk = () =>
+  request<ConceptSessionView>('/api/concept/talk', { method: 'DELETE' })
+
 /** Write the concept into the project. Refused if the project already has a story. */
 export const commitConcept = () =>
   request<ConceptCommitResult>('/api/concept/commit', { method: 'POST' })

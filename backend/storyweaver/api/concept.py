@@ -1,10 +1,16 @@
 """The concept session: proposing a novel, refining it, and committing it.
 
 Everything here works on one session held on disk, so an author can close the
-browser mid-thought and come back to it. The model is called in three places —
-proposing a spread, drawing the chapter outline for the one that was kept, and
-revising it — and never sees the transcript: the concept carries the state, so
-the fiftieth refinement costs what the first did.
+browser mid-thought and come back to it.
+
+There are two ways in. **Proposing** hands the author a spread of finished
+concepts to choose between; **talking** starts from nothing and finds the book
+in the conversation. They meet at `chosen`: from there the concept is refined
+and committed the same way, whichever way it arrived.
+
+Refining never sees a transcript — the concept carries the state, so the
+fiftieth refinement costs what the first did. The conversation is the one
+exception, because a conversation that forgets what was said is not one.
 
 `/commit` is the only call that writes to the project, and the only one that
 can destroy anything. It is refused on a project that already has a story in
@@ -23,7 +29,12 @@ from pydantic import BaseModel, Field, StringConstraints
 from storyweaver.agents import concept as agent
 from storyweaver.api import deps
 from storyweaver.concept_store import ConceptStore
-from storyweaver.models.concept import ConceptSession, ConceptTurn, StoryConcept
+from storyweaver.models.concept import (
+    ConceptMessage,
+    ConceptSession,
+    ConceptTurn,
+    StoryConcept,
+)
 from storyweaver.wiki import commit_concept
 
 logger = logging.getLogger(__name__)
@@ -54,6 +65,16 @@ class OutlineRequest(BaseModel):
 
 class RefineRequest(BaseModel):
     instruction: Instruction
+
+
+class TalkRequest(BaseModel):
+    message: Instruction
+
+
+class DistillRequest(BaseModel):
+    """Turning the conversation into a concept, optionally with its outline."""
+
+    episodes: int = Field(default=0, ge=0, le=MAX_EPISODES)
 
 
 class SessionView(BaseModel):
@@ -125,16 +146,24 @@ def read_session() -> SessionView:
 def propose(body: ProposeRequest = Body(default_factory=ProposeRequest)) -> SessionView:
     """Open a session with a spread of concepts, from a hint or from nothing.
 
-    Starting over replaces whatever was there. A session the author has
-    abandoned is not worth protecting; one they have committed already wrote
-    itself into the project, and that is not undone by this.
+    Asking again replaces the spread — a set of proposals the author did not
+    pick is not worth protecting. It does **not** touch the conversation. The
+    two ways in sit side by side on one screen, and an author who has spent an
+    afternoon talking must be able to glance at three proposals without that
+    glance costing them the afternoon.
     """
+    existing = _store().load()
     try:
         concepts = agent.propose(seed=body.seed, count=body.count)
     except Exception as error:  # noqa: BLE001 — reported to the author
         raise _model_failed(error, "만드는 데") from error
 
-    session = ConceptSession(seed=body.seed.strip(), proposals=concepts, status="proposing")
+    session = ConceptSession(
+        seed=body.seed.strip(),
+        proposals=concepts,
+        status="proposing",
+        messages=existing.messages if existing else [],
+    )
     session.turns.append(ConceptTurn(turn=0, instruction="", changed=[]))
     return SessionView(session=_store().save(session))
 
@@ -220,6 +249,91 @@ def refine(body: RefineRequest) -> SessionView:
 
 
 # ---------------------------------------------------------------------------
+# Working it out by talking
+# ---------------------------------------------------------------------------
+
+
+@router.post("/talk", response_model=SessionView)
+def talk(body: TalkRequest) -> SessionView:
+    """Say one thing to the model, and get one thing back.
+
+    The other way in hands the author three finished concepts to choose
+    between. This one starts with nothing and finds the book in the
+    conversation, which is what an author who cannot answer "what do you want
+    to write?" actually needs.
+
+    The author's message is saved before the model is called, so a failed or
+    slow call never costs them what they typed.
+    """
+    store = _store()
+    session = store.load() or ConceptSession(status="talking")
+    session.messages.append(ConceptMessage(role="author", text=body.message))
+    store.save(session)
+
+    try:
+        reply = agent.talk(session.messages)
+    except Exception as error:  # noqa: BLE001 — reported to the author
+        raise _model_failed(error, "이어 가는 데") from error
+
+    session.messages.append(ConceptMessage(role="ai", text=reply))
+    return SessionView(session=store.save(session))
+
+
+@router.post("/talk/build", response_model=SessionView)
+def build_from_talk(
+    body: DistillRequest = Body(default_factory=DistillRequest),
+) -> SessionView:
+    """Write the conversation down as a concept, and refine it from there.
+
+    This is where the two ways in meet: from here the concept behaves exactly
+    as a chosen proposal does, and the author has the same refinement loop.
+
+    The chapter outline is a second model call, so it is only drawn when the
+    author asks for one. They may well want to reshape the concept first.
+    """
+    store = _store()
+    session = _require_session()
+    if not any(message.role == "author" for message in session.messages):
+        raise HTTPException(status_code=409, detail="아직 나눈 대화가 없습니다")
+
+    try:
+        concept = agent.distill(session.messages)
+    except Exception as error:  # noqa: BLE001
+        raise _model_failed(error, "정리하는 데") from error
+
+    if body.episodes:
+        try:
+            concept = agent.outline(concept, count=body.episodes)
+        except Exception as error:  # noqa: BLE001
+            raise _model_failed(error, "회차로 펼치는 데") from error
+
+    changed = [f"대화 {len(session.messages)}개를 '{concept.title}'(으)로 정리했습니다"]
+    # What the conversation never settled, said plainly rather than left as a
+    # blank the author only notices at commit.
+    missing = agent.missing_parts(concept)
+    if missing:
+        changed.append(f"대화에서 정해지지 않은 것: {', '.join(missing)}")
+    if concept.episodes:
+        changed.append(f"회차 구상 {len(concept.episodes)}개를 만들었습니다")
+
+    session.chosen = concept
+    session.status = "refining"
+    session.turns.append(
+        ConceptTurn(turn=len(session.turns), instruction="대화한 내용으로 정리", changed=changed)
+    )
+    return SessionView(session=store.save(session), changed=changed)
+
+
+@router.delete("/talk", response_model=SessionView)
+def clear_talk() -> SessionView:
+    """Throw the conversation away, keeping whatever it already produced."""
+    store = _store()
+    session = _require_session()
+    session.messages = []
+    return SessionView(session=store.save(session))
+
+
+# ---------------------------------------------------------------------------
 # Committing
 # ---------------------------------------------------------------------------
 
@@ -254,6 +368,7 @@ def commit(force: bool = Query(default=False)) -> CommitResponse:
             memory.chronicle if memory is not None else None,
             chosen,
             session.turns,
+            session.messages,
         )
         deps.save_project(project)
 

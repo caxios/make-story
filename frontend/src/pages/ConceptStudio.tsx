@@ -16,6 +16,7 @@ import {
   ArrowRight,
   Lightbulb,
   ListOrdered,
+  MessagesSquare,
   RotateCcw,
   Sparkles,
   Trash2,
@@ -25,6 +26,7 @@ import { useNavigate } from 'react-router-dom'
 
 import * as api from '@/api/client'
 import { ConceptCard } from '@/components/ConceptCard'
+import { ConceptTalk } from '@/components/ConceptTalk'
 import { useToast } from '@/components/ToastContext'
 import {
   Badge,
@@ -33,6 +35,7 @@ import {
   EmptyState,
   PageHeader,
   Panel,
+  Tabs,
   TextArea,
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -41,6 +44,13 @@ import type { ConceptCommitResult, ConceptSession } from '@/types/storyweaver'
 
 /** How many chapters the opening outline covers. The author can redraw it. */
 const DEFAULT_EPISODES = 12
+
+/**
+ * The two ways in. They are tabs rather than a fork: an author who has been
+ * talking may want to see three proposals, and one whose three proposals all
+ * missed may want to talk. Neither may cost them the other.
+ */
+type Way = 'propose' | 'talk'
 
 export function ConceptStudio() {
   const { project, refresh } = useProject()
@@ -54,6 +64,8 @@ export function ConceptStudio() {
 
   const [seed, setSeed] = useState('')
   const [instruction, setInstruction] = useState('')
+  const [way, setWay] = useState<Way>('propose')
+  const [said, setSaid] = useState('')
   const [confirming, setConfirming] = useState(false)
   const [discarding, setDiscarding] = useState(false)
   const [result, setResult] = useState<ConceptCommitResult | null>(null)
@@ -98,6 +110,21 @@ export function ConceptStudio() {
   const choose = (index: number) =>
     run('choose', () => api.chooseConcept(index, DEFAULT_EPISODES))
 
+  const talk = () => {
+    const message = said.trim()
+    if (!message || busy) return
+    // 보내기 전에 비운다. 실패해도 작가가 친 말은 서버에 먼저 저장된다.
+    setSaid('')
+    return run('talk', () => api.talkConcept(message))
+  }
+
+  const buildFromTalk = () => run('build', () => api.buildConceptFromTalk())
+
+  const clearTalk = () => run('clear', () => api.clearConceptTalk())
+
+  const drawOutline = () =>
+    run('outline', () => api.redrawOutline(DEFAULT_EPISODES))
+
   const refine = () => {
     if (!instruction.trim()) return
     const asked = instruction.trim()
@@ -135,6 +162,8 @@ export function ConceptStudio() {
   if (loading) return <div className="sw-panel h-72 animate-pulse-soft" />
 
   const chosen = session?.chosen ?? null
+  const messages = session?.messages ?? []
+  const proposals = session?.proposals ?? []
   const committed = session?.status === 'committed'
   // Committing replaces the world and adds a cast, so it is refused on a
   // project that already has a story. Better to say so before they ask.
@@ -148,16 +177,18 @@ export function ConceptStudio() {
         title="작품 기획"
         description="어떤 소설을 쓸지부터 AI와 함께 정합니다. 제안을 받고, 마음에 드는 하나를 골라, 만족할 때까지 다듬으세요."
         actions={
-          session && (
-            <Button
-              variant="ghost"
-              icon={Trash2}
-              onClick={() => setDiscarding(true)}
-              disabled={Boolean(busy)}
-            >
-              세션 버리기
-            </Button>
-          )
+          <>
+            {session && (
+              <Button
+                variant="ghost"
+                icon={Trash2}
+                onClick={() => setDiscarding(true)}
+                disabled={Boolean(busy)}
+              >
+                세션 버리기
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -189,76 +220,115 @@ export function ConceptStudio() {
         </Panel>
       )}
 
-      {/* 1단계: 빈손 */}
-      {!session && (
-        <Panel
-          title="무엇을 쓸지부터"
-          description="원하시는 방향이 있으면 한 줄 적어 주세요. 비워 두셔도 됩니다 — 그러면 장르를 넓게 흩어서 제안합니다."
-        >
-          <TextArea
-            label="힌트 (선택)"
-            rows={3}
-            placeholder="예: 학원물인데 오컬트가 섞였으면 / 복수극인데 주인공이 악역 / (비워 두셔도 됩니다)"
-            value={seed}
-            onChange={(event) => setSeed(event.target.value)}
-          />
-          <div className="mt-4 flex justify-end">
-            <Button
-              variant="primary"
-              icon={Sparkles}
-              loading={busy === 'propose'}
-              disabled={Boolean(busy)}
-              onClick={() => void propose()}
-            >
-              {seed.trim() ? '이 방향으로 제안받기' : '아무거나 제안받기'}
-            </Button>
-          </div>
-        </Panel>
-      )}
-
-      {/* 2단계: 고르기 */}
-      {session && !chosen && (
+      {/* 1·2단계 — 두 갈래. 탭으로 나란히 두는 건, 어느 한쪽을 버려야만 다른
+          쪽으로 갈 수 있다면 그건 선택지가 아니기 때문이다. 대화하다 제안이
+          보고 싶어질 수도, 제안 셋이 다 안 맞아 대화로 넘어올 수도 있다. */}
+      {!chosen && (
         <>
-          <Panel>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-ink-dim">
-                {session.seed
-                  ? `'${session.seed}' 방향으로 ${session.proposals.length}개를 제안했습니다.`
-                  : `${session.proposals.length}개를 제안했습니다.`}
-                <span className="ml-1 text-ink-muted">
-                  하나를 고르시면 회차 구상까지 펼쳐 드립니다.
-                </span>
-              </p>
-              <Button
-                icon={RotateCcw}
-                loading={busy === 'propose'}
-                disabled={Boolean(busy)}
-                onClick={() => void propose()}
-              >
-                다시 제안받기
-              </Button>
-            </div>
-          </Panel>
+          <Tabs
+            tabs={[
+              { id: 'propose', label: 'AI 제안 받기', icon: Sparkles, count: proposals.length || undefined },
+              { id: 'talk', label: '대화하며 기획하기', icon: MessagesSquare, count: messages.length || undefined },
+            ]}
+            active={way}
+            onChange={setWay}
+          />
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            {session.proposals.map((proposal, index) => (
-              <ConceptCard
-                key={`${proposal.title}-${index}`}
-                concept={proposal}
-                action={
+          {way === 'propose' && (
+            <div className="space-y-5">
+              <Panel
+                title="무엇을 쓸지부터"
+                description="원하시는 방향이 있으면 한 줄 적어 주세요. 비워 두셔도 됩니다 — 그러면 장르를 넓게 흩어서 제안합니다."
+              >
+                <TextArea
+                  label="힌트 (선택)"
+                  rows={3}
+                  placeholder="예: 학원물인데 오컬트가 섞였으면 / 복수극인데 주인공이 악역 / (비워 두셔도 됩니다)"
+                  value={seed}
+                  onChange={(event) => setSeed(event.target.value)}
+                />
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-xs text-ink-muted">
+                    {proposals.length > 0
+                      ? '다시 받으면 지금 제안은 새 제안으로 바뀝니다. 대화는 그대로 남습니다.'
+                      : '완성된 기획 3개를 받아 그중 하나로 시작합니다.'}
+                  </span>
                   <Button
                     variant="primary"
-                    icon={ArrowRight}
-                    loading={busy === 'choose'}
+                    icon={proposals.length > 0 ? RotateCcw : Sparkles}
+                    loading={busy === 'propose'}
                     disabled={Boolean(busy)}
-                    onClick={() => void choose(index)}
+                    onClick={() => void propose()}
                   >
-                    이걸로 시작
+                    {proposals.length > 0
+                      ? '다시 제안받기'
+                      : seed.trim()
+                        ? '이 방향으로 제안받기'
+                        : '아무거나 제안받기'}
                   </Button>
-                }
-              />
-            ))}
-          </div>
+                </div>
+              </Panel>
+
+              {proposals.length > 0 && (
+                <>
+                  <p className="text-sm text-ink-dim">
+                    {session?.seed
+                      ? `'${session.seed}' 방향으로 ${proposals.length}개를 제안했습니다.`
+                      : `${proposals.length}개를 제안했습니다.`}
+                    <span className="ml-1 text-ink-muted">
+                      하나를 고르시면 회차 구상까지 펼쳐 드립니다.
+                    </span>
+                  </p>
+                  <div className="grid gap-4 lg:grid-cols-3">
+                    {proposals.map((proposal, index) => (
+                      <ConceptCard
+                        key={`${proposal.title}-${index}`}
+                        concept={proposal}
+                        action={
+                          <Button
+                            variant="primary"
+                            icon={ArrowRight}
+                            loading={busy === 'choose'}
+                            disabled={Boolean(busy)}
+                            onClick={() => void choose(index)}
+                          >
+                            이걸로 시작
+                          </Button>
+                        }
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {session && session.status === 'proposing' && proposals.length === 0 && (
+                <Panel>
+                  <EmptyState
+                    icon={Lightbulb}
+                    title="쓸 만한 제안이 오지 않았습니다"
+                    description="다시 제안받아 보세요. 힌트를 한 줄 적어 주시면 더 잘 맞습니다."
+                    action={
+                      <Button variant="primary" onClick={() => void propose()}>
+                        다시 제안받기
+                      </Button>
+                    }
+                  />
+                </Panel>
+              )}
+            </div>
+          )}
+
+          {way === 'talk' && (
+            <ConceptTalk
+              messages={messages}
+              draft={said}
+              onDraftChange={setSaid}
+              busy={busy}
+              onSend={() => void talk()}
+              onBuild={() => void buildFromTalk()}
+              onClear={() => void clearTalk()}
+            />
+          )}
         </>
       )}
 
@@ -291,6 +361,16 @@ export function ConceptStudio() {
                   지금까지 {Math.max(session.turns.length - 1, 0)}번 손봤습니다
                 </span>
                 <div className="flex gap-2">
+                  {chosen.episodes.length === 0 && (
+                    <Button
+                      icon={ListOrdered}
+                      loading={busy === 'outline'}
+                      disabled={Boolean(busy)}
+                      onClick={() => void drawOutline()}
+                    >
+                      회차 구상 만들기
+                    </Button>
+                  )}
                   <Button
                     icon={Sparkles}
                     loading={busy === 'refine'}
@@ -310,6 +390,14 @@ export function ConceptStudio() {
                 </div>
               </div>
 
+              {chosen.episodes.length === 0 && (
+                <p className="mt-3 text-xs leading-relaxed text-ink-muted">
+                  아직 회차 구상이 없습니다. 지금 만드셔도 되고, 컨셉을 더 다듬은 뒤에
+                  만드셔도 됩니다 — 어차피 회차별 상세 기획은 그 회차를 쓰기 직전에 따로
+                  하고, 작가님이 확인하신 뒤에야 집필이 시작됩니다.
+                </p>
+              )}
+
               {occupied && (
                 <p className="mt-3 rounded-lg border border-warn/30 bg-warn/10 p-3 text-xs leading-relaxed text-warn-bright">
                   이미 설정이 있는 작품입니다. 기획을 반영하면 세계관이 덮이고 인물과
@@ -324,21 +412,6 @@ export function ConceptStudio() {
 
           {session.turns.length > 1 && <TurnHistory session={session} />}
         </>
-      )}
-
-      {session && !chosen && session.proposals.length === 0 && (
-        <Panel>
-          <EmptyState
-            icon={Lightbulb}
-            title="쓸 만한 제안이 오지 않았습니다"
-            description="다시 제안받아 보세요. 힌트를 한 줄 적어 주시면 더 잘 맞춥니다."
-            action={
-              <Button variant="primary" onClick={() => void propose()}>
-                다시 제안받기
-              </Button>
-            }
-          />
-        </Panel>
       )}
 
       <ConfirmDialog

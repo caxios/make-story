@@ -52,6 +52,14 @@ of it lands as the first entry in a chronicle chain rather than as a decision.
           ↓
    the author picks one
           ↓
+       ── or ──             for an author who cannot answer "what do you
+          ↓                 want to write?" yet:
+   talk   ◄──────┐          one message each way, as many as it takes
+          ↓      │
+          └──────┘
+          ↓
+   distill                  the conversation, written down as one concept
+          ↓
    refine  ◄──────┐         free text: "주인공을 더 어리게"
           ↓       │         the model returns a revised concept, changes marked
           └───────┘         as many times as the author wants
@@ -399,8 +407,15 @@ file has two places and missing either one is a silent 404.
 | POST | `/api/concept/propose` | `{seed?, count?}` → opens or restarts a session |
 | POST | `/api/concept/choose` | `{index}` → picks one of the proposals |
 | POST | `/api/concept/refine` | `{instruction}` → one revision, returns the concept and `changed` |
+| POST | `/api/concept/talk` | `{message}` → one round of the conversation |
+| POST | `/api/concept/talk/build` | `{episodes?}` → the conversation, written down as `chosen` |
+| DELETE | `/api/concept/talk` | clear the conversation, keep what it produced |
 | POST | `/api/concept/commit` | §8 |
 | DELETE | `/api/concept` | discard the session |
+
+`/talk/build` before anyone has spoken is **409**, and an empty `message` is
+**422**. The author's message is appended and saved **before** the model is
+called, so a failed or slow call never costs them what they typed.
 
 `/refine` on a session with no `chosen` is **409**. `/commit` on a non-empty
 project is **409** (§8.1). An empty `instruction` is **422** — a refinement with
@@ -445,6 +460,75 @@ not `label`/`tone`; `Modal` and `Drawer` render through `createPortal`; there ar
 no `var(--color-muted)` / `var(--color-border)` CSS variables — use the Tailwind
 tokens (`text-ink-muted`, `border-line`); the episode-creating client function is
 `addEpisode(storyline, title, pacing)`.
+
+---
+
+## 10a. Talking it out
+
+The spread of three answers *"show me something"*. It does not serve the author
+who cannot yet answer "what do you want to write?" — picking one of three
+strangers' books is not the same as finding your own.
+
+So there is a second way in, on the same screen: a button on the empty state
+opens a modal, and the author and the model work it out one message at a time.
+When it has covered enough, `/talk/build` writes the conversation down as a
+`StoryConcept` and sets it as `chosen`. **From that point the two paths are the
+same code** — the same refinement loop, the same outline, the same commit.
+Nothing downstream knows or cares which way the concept arrived.
+
+### Why this one replays the transcript
+
+Everywhere else in the concept stage the model is sent the current concept and
+one instruction, never the history, which is what makes unlimited refinement
+affordable. A conversation cannot work that way: one that has forgotten what
+was said two lines ago is not a conversation. So this is the one stage whose
+cost grows with use, and it is bounded rather than avoided —
+`TRANSCRIPT_WINDOW = 40` messages, and a prompt that demands three or four
+sentences per reply.
+
+The window drops the oldest messages rather than summarising them. A summary of
+the early conversation would be the model's account of what the author decided,
+and that account would then be treated as the decision itself. When messages
+are dropped the transcript says so, so the model does not silently contradict
+something already agreed.
+
+### The reply is not structured
+
+`talk` calls the model without a schema. Asked for a schema, a model fills
+every field — and a filled-in concept is precisely what this stage must not
+produce. The value here is the half-formed thought the author can push back on.
+
+### Writing it down
+
+`distill` gets the **whole** transcript, not the window: it runs once, and
+dropping the opening of a conversation would drop the premise.
+
+The prompt separates three kinds of gap: a detail nobody mentioned is filled in
+the way *this* conversation implies; something they were still deciding takes
+the direction the conversation was moving in; something they explicitly left
+open still gets a plausible value, because an empty ending reaches the planner
+as no direction at all. Whatever the conversation actually settled is written
+down as settled, even where the model would have chosen otherwise — a concept
+that does not match the conversation is one the author cannot trust.
+
+What the conversation never settled is then named back to the author in
+`changed` ("대화에서 정해지지 않은 것: 계획된 결말"), so a gap is met while it
+is still cheap to fix rather than at commit.
+
+### The conversation goes into the wiki too
+
+`commit_concept` writes the transcript into 기획 기록 on the story page, line by
+line and before the refinement turns, because for a concept worked out this way
+the reasoning *is* the conversation and the refinements are footnotes to it.
+
+Line by line rather than summarised, for the same reason the window drops
+messages instead of summarising them: each line is then its own chronicle entry
+the author can edit or retract, and a summary would be the model's account of
+what they decided.
+
+The chapter outline is **not** drawn here by default. It is a second model call,
+and the author may well want to reshape the concept first; the refining panel
+offers 회차 구상 만들기 when there is no outline yet.
 
 ---
 
