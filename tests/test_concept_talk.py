@@ -18,6 +18,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from storyweaver import config
 from storyweaver.agents import concept as agent
 from storyweaver.api import concept as route
 from storyweaver.concept_store import ConceptStore
@@ -177,7 +178,17 @@ def test_the_reply_is_asked_for_as_prose(client):
     the half-formed thought the author is meant to push back on."""
     prompt = agent.build_talk_prompt([ConceptMessage(role="author", text="음")])
 
-    assert "Three or four sentences" in prompt
+    assert "Plain" in prompt and "No headings" in prompt
+
+
+def test_the_reply_length_is_not_capped():
+    """The author asked for replies as long as the answer needs: no sentence
+    count in the prompt, and not the shared token cap either."""
+    prompt = agent.build_talk_prompt([ConceptMessage(role="author", text="음")])
+
+    assert "sentences" not in prompt.split("## How to answer")[1].split("**One question")[0]
+    assert "Three or four" not in prompt
+    assert agent.TALK_MAX_OUTPUT_TOKENS > config.MAX_OUTPUT_TOKENS
 
 
 # ==========================================================================

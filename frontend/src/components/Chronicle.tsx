@@ -6,10 +6,11 @@
  * 전체를 검수할 때 작가가 어디서 어긋났는지 찾는 근거가 그것이기 때문이다.
  *
  * 그래서 취소는 삭제가 아니다. 취소된 줄은 줄이 그어진 채 남고, 되살릴 수
- * 있다.
+ * 있다. 흔적까지 없애고 싶은 기록(잘못 적은 것, 중복, 시험 삼아 적은 것)은
+ * 삭제로 지운다.
  */
 
-import { RotateCcw, Undo2 } from 'lucide-react'
+import { RotateCcw, Trash2, Undo2 } from 'lucide-react'
 
 import { Badge, IconButton } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -38,12 +39,14 @@ export function Chronicle({
   isLog = false,
   onRetract,
   onRestore,
+  onDelete,
   busy = false,
 }: {
   entries: ChronicleEntry[]
   isLog?: boolean
   onRetract?: (entry: ChronicleEntry) => void
   onRestore?: (entry: ChronicleEntry) => void
+  onDelete?: (entry: ChronicleEntry) => void
   busy?: boolean
 }) {
   if (entries.length === 0) {
@@ -106,6 +109,15 @@ export function Chronicle({
                         onClick={() => onRetract(entry)}
                       />
                     )}
+                {!entry.pending && onDelete && (
+                  <IconButton
+                    icon={Trash2}
+                    title="이 기록 삭제"
+                    variant="danger"
+                    disabled={busy}
+                    onClick={() => onDelete(entry)}
+                  />
+                )}
               </span>
             </div>
 

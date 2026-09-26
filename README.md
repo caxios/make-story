@@ -42,7 +42,9 @@ python scripts/dev.py                    # POSIX, or with the venv activated
 ```
 
 One command brings up both halves: the backend on `:8001` and the studio on
-`:5173`. Wait for `✅ Both servers are running!` before opening
+`:5173`. **Auto-reload is on**: saving a backend file — code or a prompt under
+`agents/prompts/` — restarts the backend by itself, and the frontend hot-reloads
+as usual, so there is nothing to restart while you edit. Wait for `✅ Both servers are running!` before opening
 <http://localhost:5173> — the backend loads its memory store first, and a
 generation started before that is refused.
 
@@ -63,10 +65,24 @@ On a fresh project the order is:
 4. **📝 에피소드 큐 → 기획서 만들기** — check the scene layout, approve it, generate.
 5. When the chapter is done you are shown **what it recorded** about the cast and
    the world. Only what you accept reaches the next chapter.
-6. **📖 위키** — every setting, and the history of how it got that way.
+6. **📖 위키** — every setting, and the history of how it got that way. Anything
+   can be deleted from here: one record, a section's contents, or a whole page.
 
-`python scripts/dev.py --reload` restarts the backend when you edit it. It is
-off by default because a restart interrupts whatever is being written.
+To start a different novel, **⚙️ 설정 → 새 작품으로 시작 (초기화)** clears the
+world, cast, chapters, wiki and memory. The concept you are working on in 작품
+기획 and your writing style are kept, so you can reset and then commit the new
+concept straight away. Take the backup it offers first if you want the old one.
+
+Only the backend restarts; the studio stays up. If the file you saved has an
+error, the backend stays down and says so, and the next save brings it back. A
+restart does interrupt a chapter that is being generated (it resumes from its
+checkpoint), so for a long writing session rather than editing the app, turn it
+off:
+
+```bash
+start.bat --no-reload
+.venv\Scripts\python.exe scripts\dev.py --no-reload
+```
 
 ### The HTTP API on its own
 
@@ -136,7 +152,7 @@ Generation reports real progress, driven by the pipeline itself:
 ## Command line
 
 ```bash
-pytest                                        # 809 tests, no API key and no network (enforced, not assumed)
+pytest                                        # 835 tests, no API key and no network (enforced, not assumed)
 python -m storyweaver.smoke_test              # is the model binding working?
 python -m storyweaver.demo_scene --two        # one scene, printed
 python -m storyweaver.demo_episode --memory   # one episode, with continuity

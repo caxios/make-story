@@ -483,8 +483,9 @@ one instruction, never the history, which is what makes unlimited refinement
 affordable. A conversation cannot work that way: one that has forgotten what
 was said two lines ago is not a conversation. So this is the one stage whose
 cost grows with use, and it is bounded rather than avoided —
-`TRANSCRIPT_WINDOW = 40` messages, and a prompt that demands three or four
-sentences per reply.
+`TRANSCRIPT_WINDOW = 40` messages. Reply length is deliberately **not**
+limited: the prompt asks for as much as the answer needs, and `talk` raises the
+output cap to `TALK_MAX_OUTPUT_TOKENS` so a long answer is not cut off.
 
 The window drops the oldest messages rather than summarising them. A summary of
 the early conversation would be the model's account of what the author decided,

@@ -10,8 +10,8 @@
  * 쪽을 버려야만 갈 수 있다면 그건 선택지가 아니다.
  *
  * 여기서는 대화 기록 자체가 상태다 — 이 앱에서 유일하게 모델에게 지난 대화를
- * 다시 보내는 자리이고, 유일하게 쓸수록 비용이 늘어나는 자리다. 짧게 주고받게
- * 만든 건 그래서다.
+ * 다시 보내는 자리이고, 유일하게 쓸수록 비용이 늘어나는 자리다. 답의 길이는
+ * 제한하지 않는다 — 필요한 만큼 길게 답한다.
  */
 
 import { MessagesSquare, Send, Sparkles, Trash2 } from 'lucide-react'
@@ -44,7 +44,7 @@ export function ConceptTalk({
   onBuild: () => void
   onClear: () => void
 }) {
-  const endRef = useRef<HTMLDivElement>(null)
+  const endRef = useRef<HTMLLIElement>(null)
 
   // 답이 도착하면 그쪽으로 따라 내려간다. 대화는 아래가 현재다.
   useEffect(() => {

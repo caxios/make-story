@@ -395,6 +395,132 @@ def test_retracting_something_that_does_not_exist_is_a_404(client, loaded):
 
 
 # ==========================================================================
+# Deleting
+# ==========================================================================
+
+
+def test_a_deleted_entry_leaves_no_trace(client, loaded, harry):
+    """Retracting keeps a struck-through line; deleting keeps nothing."""
+    page = client.post(f"/api/wiki/character/{harry.id}/sections/appearance/entries",
+                       json={"value": "잘못 적은 모습"}).json()
+    entry = _section(page, "appearance")["entries"][-1]
+
+    gone = client.delete(f"/api/wiki/entries/{entry['entry_id']}")
+    assert gone.status_code == 200
+    assert gone.json()["value"] == "잘못 적은 모습"
+
+    page = client.get(f"/api/wiki/character/{harry.id}").json()
+    section = _section(page, "appearance")
+    assert all(e["entry_id"] != entry["entry_id"] for e in section["entries"])
+    assert "잘못 적은 모습" not in section["current"]
+
+
+def test_deleting_the_latest_entry_falls_back_to_the_one_before(client, loaded, harry):
+    client.post(f"/api/wiki/character/{harry.id}/sections/appearance/entries",
+                json={"value": "첫 번째 모습"})
+    page = client.post(f"/api/wiki/character/{harry.id}/sections/appearance/entries",
+                       json={"value": "두 번째 모습"}).json()
+    latest = _section(page, "appearance")["entries"][-1]
+
+    client.delete(f"/api/wiki/entries/{latest['entry_id']}")
+
+    page = client.get(f"/api/wiki/character/{harry.id}").json()
+    assert _section(page, "appearance")["current"] == "첫 번째 모습"
+
+
+def test_deleting_one_entry_leaves_the_rest_of_the_page(client, loaded, memory, harry):
+    _hair_cut(memory, harry.id, loaded)
+    page = client.post(f"/api/wiki/character/{harry.id}/sections/appearance/entries",
+                       json={"value": "지울 모습"}).json()
+    doomed = _section(page, "appearance")["entries"][-1]
+
+    client.delete(f"/api/wiki/entries/{doomed['entry_id']}")
+
+    assert memory.chronicle.chain("character", harry.id, "appearance")[-1].value == "짧게 깎은 머리"
+
+
+def test_deleting_something_that_does_not_exist_is_a_404(client, loaded):
+    assert client.delete("/api/wiki/entries/없는아이디").status_code == 404
+
+
+def test_clearing_a_section_empties_it_for_real(client, loaded, memory, harry):
+    """Deleting only the history would let the sheet's value reappear."""
+    _hair_cut(memory, harry.id, loaded)
+
+    page = client.delete(
+        f"/api/wiki/character/{harry.id}/sections/appearance/content"
+    ).json()
+
+    section = _section(page, "appearance")
+    assert section["current"] == "" and section["entries"] == []
+    assert client.get("/api/project").json()["characters"][0]["appearance"] == ""
+
+
+def test_clearing_a_list_section_leaves_an_empty_list(client, loaded, harry):
+    client.delete(f"/api/wiki/character/{harry.id}/sections/personality/content")
+
+    assert client.get("/api/project").json()["characters"][0]["traits"] == []
+
+
+def test_clearing_a_relationship_removes_only_that_one(client, loaded, harry, ron):
+    before = len(harry.relationships)
+    key = relationship_section_key(ron.id)
+
+    client.delete(f"/api/wiki/character/{harry.id}/sections/{key}/content")
+
+    after = client.get("/api/project").json()["characters"][0]["relationships"]
+    assert len(after) == before - 1
+    assert all(r["target_character_id"] != ron.id for r in after)
+
+
+def test_deleting_a_character_page_deletes_the_character(client, loaded, memory, harry):
+    _hair_cut(memory, harry.id, loaded)
+
+    gone = client.delete(f"/api/wiki/character/{harry.id}")
+
+    assert gone.status_code == 200
+    assert all(c["id"] != harry.id for c in client.get("/api/project").json()["characters"])
+    rows = client.get("/api/wiki/subjects").json()
+    assert all(r["subject_id"] != harry.id for r in rows)
+    assert memory.chronicle.subject("character", harry.id) == []
+
+
+def test_deleting_a_location_page_deletes_the_location(client, loaded):
+    location = loaded.world.locations[0]
+
+    client.delete(f"/api/wiki/location/{location.id}")
+
+    world = client.get("/api/project").json()["world"]
+    assert all(l["id"] != location.id for l in world["locations"])
+
+
+def test_the_work_and_world_pages_cannot_be_deleted_whole(client, loaded):
+    assert client.delete("/api/wiki/world/world").status_code == 409
+    assert client.delete("/api/wiki/story/story").status_code == 409
+
+
+def test_deleting_a_page_that_does_not_exist_is_a_404(client, loaded):
+    assert client.delete("/api/wiki/faction/없는세력").status_code == 404
+
+
+def test_a_section_can_be_deleted_with_its_history(client, loaded, memory, harry):
+    client.post(f"/api/wiki/character/{harry.id}/sections", json={"title": "능력"})
+    client.post(f"/api/wiki/character/{harry.id}/sections/능력/entries",
+                json={"value": "파셀텅"})
+    _hair_cut(memory, harry.id, loaded)
+
+    client.delete(f"/api/wiki/character/{harry.id}/sections/능력?purge=true")
+
+    # Re-adding it finds nothing — and the other sections were not touched.
+    page = client.post(
+        f"/api/wiki/character/{harry.id}/sections", json={"title": "능력"}
+    ).json()
+    assert _section(page, "능력")["current"] == ""
+    assert _section(page, "능력")["entries"] == []
+    assert memory.chronicle.chain("character", harry.id, "appearance")
+
+
+# ==========================================================================
 # Without a memory layer
 # ==========================================================================
 

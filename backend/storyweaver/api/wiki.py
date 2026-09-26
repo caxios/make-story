@@ -439,13 +439,15 @@ def delete_section(
     subject_type: SubjectType,
     subject_id: str,
     section_key: str,
+    purge: bool = False,
     project: Project = Depends(deps.get_project),
 ) -> SubjectPage:
-    """Remove a section the author added. Its history is kept.
+    """Remove a section the author added.
 
-    Deleting the section does not delete what happened — the entries stay in
-    the chronicle, and re-adding the section brings them back into view. A
-    wiki that lost history on a layout change would not be a record.
+    By default its history is kept — the entries stay in the chronicle, and
+    re-adding the section brings them back into view, so a layout change never
+    costs a record. With `purge` the entries go too, for a section the author
+    wants gone entirely.
     """
     store = _chronicle()
     saved = store.get_wiki_subject(subject_type, subject_id)
@@ -457,6 +459,8 @@ def delete_section(
         )
     saved.free_sections = [s for s in saved.free_sections if s.key != section_key]
     store.save_wiki_subject(saved)
+    if purge:
+        store.drop_section(subject_type, subject_id, section_key)
     return _build_page(project, subject_type, subject_id)
 
 
@@ -536,6 +540,69 @@ def retract_entry(entry_id: str) -> ChronicleEntry:
     return updated
 
 
+@router.delete("/entries/{entry_id}", response_model=ChronicleEntry)
+def delete_entry(entry_id: str) -> ChronicleEntry:
+    """Delete an entry outright. Returns the entry that was removed.
+
+    Retracting keeps a struck-through line; this keeps nothing. It is for a
+    record the author does not want on the page at all — a wrong note, a
+    duplicate, a test. The section falls back to what came before it.
+    """
+    store = _chronicle()
+    gone = store.delete(entry_id)
+    if gone is None:
+        raise HTTPException(status_code=404, detail="그런 기록이 없습니다")
+    return gone
+
+
+def _emptied(model: BaseModel, field: str) -> object:
+    """What a field holds when nobody has written anything in it."""
+    info = type(model).model_fields.get(field)
+    if info is not None and not info.is_required():
+        return info.get_default(call_default_factory=True)
+    return [] if isinstance(getattr(model, field, None), list) else ""
+
+
+@router.delete(
+    "/{subject_type}/{subject_id}/sections/{section_key}/content",
+    response_model=SubjectPage,
+)
+def clear_section(subject_type: SubjectType, subject_id: str, section_key: str) -> SubjectPage:
+    """Empty a section: its whole history, and the setting underneath it.
+
+    Deleting only the history would not empty anything — a section with no
+    entries falls back to what the author first wrote on the sheet, so the
+    value would reappear unchanged. When an author asks for a section to be
+    cleared they mean the page should say nothing there, and the next chapter
+    should not be told it either.
+    """
+    store = _chronicle()
+    saved = store.get_wiki_subject(subject_type, subject_id)
+    spec = section_for(subject_type, section_key) or saved.section(section_key)
+    target = relationship_target(section_key)
+    if spec is None and target is None:
+        raise HTTPException(status_code=404, detail=f"{section_key!r} 섹션이 없습니다")
+
+    with deps.write_lock():
+        project = deps.get_project()
+        base = _subject(project, subject_type, subject_id)
+        field = "relationships" if target is not None else (spec.bound_field if spec else None)
+        if base is not None and field:
+            if target is not None:
+                base.relationships = [
+                    r for r in base.relationships if r.target_character_id != target
+                ]
+            else:
+                setattr(base, field, _emptied(base, field))
+            deps.save_project(project)
+        removed = store.drop_section(subject_type, subject_id, section_key)
+
+    logger.info(
+        "Cleared %s/%s section %r (%d entries)", subject_type, subject_id, section_key, removed
+    )
+    return _build_page(deps.get_project(), subject_type, subject_id)
+
+
 # ---------------------------------------------------------------------------
 # The author's review
 # ---------------------------------------------------------------------------
@@ -591,3 +658,67 @@ def restore_entry(entry_id: str) -> ChronicleEntry:
     if updated is None:
         raise HTTPException(status_code=404, detail="그런 기록이 없습니다")
     return updated
+
+
+# ---------------------------------------------------------------------------
+# Deleting a whole page
+#
+# Declared last on purpose: `/{subject_type}/{subject_id}` has the same shape as
+# `/entries/{entry_id}`, and routes match in the order they are declared.
+# ---------------------------------------------------------------------------
+
+
+class DeletedPage(BaseModel):
+    subject_type: SubjectType
+    subject_id: str
+    title: str
+    entries: int = 0
+
+
+@router.delete("/{subject_type}/{subject_id}", response_model=DeletedPage)
+def delete_page(subject_type: SubjectType, subject_id: str) -> DeletedPage:
+    """Delete a page, and the thing it is about.
+
+    A character, place or rule has a page because it is in the project, so
+    deleting only the page would bring it straight back. Deleting from the wiki
+    therefore deletes the thing itself, the same as deleting it from the
+    workshop — and here the page goes completely rather than being kept as a
+    record, because this is the author saying they want it gone.
+
+    The work's own page and the world's cannot be deleted whole; they are the
+    frame everything else hangs on. Their sections can each be cleared.
+    """
+    if subject_type in ("story", "world"):
+        raise HTTPException(
+            status_code=409,
+            detail="작품·세계관 문서는 통째로 지울 수 없습니다. 섹션별로 내용을 지워 주세요.",
+        )
+
+    store = _chronicle()
+    with deps.write_lock():
+        project = deps.get_project()
+        title = store.get_wiki_subject(subject_type, subject_id).title or _title(
+            project, subject_type, subject_id
+        )
+        in_project = _subject(project, subject_type, subject_id) is not None
+        on_wiki = (
+            store.subject_path(subject_type, subject_id).is_file()
+            or store.wiki_path(subject_type, subject_id).is_file()
+        )
+        if not in_project and not on_wiki:
+            raise HTTPException(status_code=404, detail="그런 문서가 없습니다")
+
+        if in_project:
+            if subject_type == "character":
+                project.remove_character(subject_id)
+            elif subject_type == "location":
+                project.remove_location(subject_id)
+            elif subject_type == "rule":
+                project.remove_rule(subject_id)
+            deps.save_project(project)
+        removed = store.drop_subject(subject_type, subject_id)
+
+    logger.info("Deleted wiki page %s/%s (%d entries)", subject_type, subject_id, removed)
+    return DeletedPage(
+        subject_type=subject_type, subject_id=subject_id, title=title, entries=removed
+    )

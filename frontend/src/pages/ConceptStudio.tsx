@@ -358,7 +358,7 @@ export function ConceptStudio() {
               />
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                 <span className="text-xs text-ink-muted">
-                  지금까지 {Math.max(session.turns.length - 1, 0)}번 손봤습니다
+                  지금까지 {Math.max((session?.turns.length ?? 0) - 1, 0)}번 손봤습니다
                 </span>
                 <div className="flex gap-2">
                   {chosen.episodes.length === 0 && (
@@ -399,18 +399,23 @@ export function ConceptStudio() {
               )}
 
               {occupied && (
-                <p className="mt-3 rounded-lg border border-warn/30 bg-warn/10 p-3 text-xs leading-relaxed text-warn-bright">
-                  이미 설정이 있는 작품입니다. 기획을 반영하면 세계관이 덮이고 인물과
-                  회차가 섞이기 때문에 거부됩니다. 새 작품으로 시작하시려면 설정에서
-                  먼저 초기화해 주세요.
-                </p>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warn/30 bg-warn/10 p-3 text-xs leading-relaxed text-warn-bright">
+                  <p className="min-w-0 flex-1">
+                    이미 설정이 있는 작품입니다. 기획을 반영하면 세계관이 덮이고 인물과
+                    회차가 섞이기 때문에 거부됩니다. 새 작품으로 시작하시려면 설정에서
+                    먼저 초기화해 주세요. 지금 기획은 초기화해도 남습니다.
+                  </p>
+                  <Button size="sm" onClick={() => navigate('/settings#reset')}>
+                    초기화하러 가기
+                  </Button>
+                </div>
               )}
             </Panel>
           )}
 
           <ConceptCard concept={chosen} expanded />
 
-          {session.turns.length > 1 && <TurnHistory session={session} />}
+          {session && session.turns.length > 1 && <TurnHistory session={session} />}
         </>
       )}
 

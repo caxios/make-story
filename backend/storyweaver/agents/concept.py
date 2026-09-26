@@ -175,6 +175,12 @@ def outline(
 # and that account would then be treated as the decision itself.
 TRANSCRIPT_WINDOW = 40
 
+# The reply's length is left to the model. The shared cap (config.MAX_OUTPUT_TOKENS)
+# is sized for structured stages and counts Gemini's thinking tokens too, so a
+# long answer could be cut off mid-sentence under it. This is the model's own
+# ceiling, i.e. no limit of ours.
+TALK_MAX_OUTPUT_TOKENS = 65536
+
 AUTHOR_LABEL = "작가"
 AI_LABEL = "AI"
 
@@ -227,7 +233,9 @@ def talk(messages: Sequence[ConceptMessage], llm=None) -> str:
     is the half-formed thought the author can push back on.
     """
     prompt = build_talk_prompt(messages)
-    model = telemetry.meter(llm or get_llm(stage="concept"), "concept")
+    model = telemetry.meter(
+        llm or get_llm(stage="concept", max_output_tokens=TALK_MAX_OUTPUT_TOKENS), "concept"
+    )
     reply = reply_text(model.invoke(prompt))
 
     if not reply:

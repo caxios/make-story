@@ -314,6 +314,46 @@ class ChronicleStore:
     def restore(self, entry_id: str) -> ChronicleEntry | None:
         return self._replace(entry_id, {"superseded": False})
 
+    def delete(self, entry_id: str) -> ChronicleEntry | None:
+        """Remove an entry outright, at the author's request. Returns what went.
+
+        Unlike `retract` this leaves no trace — for a record that should never
+        have been written, where a struck-through line would only be noise. The
+        section falls back to the latest entry still there, or to the setting
+        the author wrote. `sequence` is not reused, so what remains keeps its
+        order.
+        """
+        if not self.root.is_dir():
+            return None
+        for path in sorted(self.root.rglob("*.json")):
+            if path.name == SEQUENCE_FILENAME:
+                continue
+            entries = self._read(path)
+            gone = next((e for e in entries if e.entry_id == entry_id), None)
+            if gone is None:
+                continue
+            kept = [e for e in entries if e.entry_id != entry_id]
+            if kept:
+                self._write(path, kept)
+            else:
+                path.unlink(missing_ok=True)
+            logger.info("Deleted chronicle entry %s from %s %r", entry_id, gone.subject_type, gone.subject_id)
+            return gone
+        return None
+
+    def drop_section(self, subject_type: SubjectType, subject_id: str, section_key: str) -> int:
+        """Delete every entry in one section of one page. Returns how many."""
+        path = self.subject_path(subject_type, subject_id)
+        entries = self._read(path)
+        kept = [e for e in entries if e.section_key != section_key]
+        removed = len(entries) - len(kept)
+        if removed:
+            if kept:
+                self._write(path, kept)
+            else:
+                path.unlink(missing_ok=True)
+        return removed
+
     # --- the author's review ------------------------------------------------
 
     def pending(self, episode_number: int | None = None) -> list[ChronicleEntry]:

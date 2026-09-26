@@ -5,14 +5,25 @@
  * decorative: if a setting could not change the output, it would not be here.
  */
 
-import { AlertTriangle, Coins, Gauge, KeyRound, Save, Type } from 'lucide-react'
+import {
+  AlertTriangle,
+  Coins,
+  Download,
+  Gauge,
+  KeyRound,
+  RotateCcw,
+  Save,
+  Type,
+} from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import * as api from '@/api/client'
 import { useToast } from '@/components/ToastContext'
 import {
   Badge,
   Button,
+  Modal,
   PageHeader,
   Panel,
   SelectField,
@@ -58,8 +69,94 @@ export function Settings() {
         <StylePanel />
         <ChroniclePanel />
         <TelemetryPanel />
+        <ResetPanel />
       </div>
     </>
+  )
+}
+
+// ==========================================================================
+// Starting a new work
+// ==========================================================================
+
+function ResetPanel() {
+  const { refresh } = useProject()
+  const { success, fromError } = useToast()
+  const navigate = useNavigate()
+  const { hash } = useLocation()
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  // 작품 기획에서 "초기화하러 가기"로 오면 이 패널이 맨 아래라 안 보인다.
+  useEffect(() => {
+    if (hash === '#reset') document.getElementById('reset')?.scrollIntoView({ block: 'center' })
+  }, [hash])
+
+  const reset = async () => {
+    setBusy(true)
+    try {
+      await api.resetProject()
+      await refresh()
+      setConfirming(false)
+      success('새 작품으로 시작합니다. 작품 기획에서 이어서 하시면 됩니다.')
+      navigate('/concept')
+    } catch (cause) {
+      fromError(cause, '초기화하지 못했습니다.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div id="reset">
+    <Panel
+      title="새 작품으로 시작 (초기화)"
+      description="지금 작품의 세계관, 등장인물, 회차와 본문, 위키, AI의 기억을 모두 지웁니다."
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <p className="max-w-2xl text-sm leading-relaxed text-ink-dim">
+          작품 기획에서 만들어 둔 기획(대화와 제안 포함)과 이 페이지의 문체 설정은 그대로
+          남습니다. 그래서 초기화한 뒤 작품 기획으로 가서 바로 확정하시면 됩니다.
+          <span className="mt-2 block text-xs text-ink-muted">
+            되돌릴 수 없습니다. 지금 작품을 남겨 두시려면 먼저 백업을 받으세요 — 백업 ZIP은
+            나중에 그대로 불러올 수 있습니다.
+          </span>
+        </p>
+        <div className="flex gap-2">
+          <Button icon={Download} onClick={() => api.downloadProjectArchive(true)}>
+            백업 받기
+          </Button>
+          <Button variant="danger" icon={RotateCcw} onClick={() => setConfirming(true)}>
+            초기화
+          </Button>
+        </div>
+      </div>
+
+      <Modal
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        title="지금 작품을 모두 지울까요?"
+        footer={
+          <>
+            <Button onClick={() => setConfirming(false)} disabled={busy}>
+              취소
+            </Button>
+            <Button variant="danger" loading={busy} onClick={() => void reset()}>
+              모두 지우고 새로 시작
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-2 text-sm leading-relaxed text-ink-dim">
+          <p>세계관, 등장인물, 회차와 본문, 위키, AI의 기억이 모두 지워지며 되돌릴 수 없습니다.</p>
+          <p className="text-ink-muted">
+            작품 기획의 내용과 문체 설정은 남습니다. 백업을 아직 안 받으셨다면 취소하고 먼저
+            받으세요.
+          </p>
+        </div>
+      </Modal>
+    </Panel>
+    </div>
   )
 }
 

@@ -9,13 +9,14 @@
  * 고치는 것은 덮어쓰는 것이 아니라 내력에 한 줄을 더하는 것이다.
  */
 
-import { ArrowLeft, ChevronDown, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Eraser, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import * as api from '@/api/client'
 import { Chronicle } from '@/components/Chronicle'
 import { useToast } from '@/components/ToastContext'
+import { deletable, deletePageMessage } from '@/components/wikiDelete'
 import {
   Badge,
   Button,
@@ -29,7 +30,14 @@ import {
   TextField,
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
-import type { SectionKind, SubjectType, WikiPage, WikiSection } from '@/types/storyweaver'
+import { useProject } from '@/state/ProjectContext'
+import type {
+  ChronicleEntry,
+  SectionKind,
+  SubjectType,
+  WikiPage,
+  WikiSection,
+} from '@/types/storyweaver'
 
 const TYPE_LABELS: Record<SubjectType, string> = {
   story: '작품',
@@ -46,6 +54,7 @@ export function WikiSubject() {
   const subjectId = params.subjectId ?? ''
 
   const { success, fromError } = useToast()
+  const { refresh } = useProject()
   const navigate = useNavigate()
 
   const [page, setPage] = useState<WikiPage | null>(null)
@@ -61,6 +70,10 @@ export function WikiSubject() {
   const [newKind, setNewKind] = useState<SectionKind>('stateful')
 
   const [deletingSection, setDeletingSection] = useState<WikiSection | null>(null)
+  const [purgeSection, setPurgeSection] = useState(false)
+  const [deletingEntry, setDeletingEntry] = useState<ChronicleEntry | null>(null)
+  const [clearingSection, setClearingSection] = useState<WikiSection | null>(null)
+  const [deletingPage, setDeletingPage] = useState(false)
   const [summaryDraft, setSummaryDraft] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -125,11 +138,15 @@ export function WikiSubject() {
     }
   }
 
-  const removeSection = async (section: WikiSection) => {
+  const removeSection = async (section: WikiSection, purge: boolean) => {
     setBusy(true)
     try {
-      apply(await api.deleteWikiSection(subjectType, subjectId, section.key))
-      success(`'${section.title}' 섹션을 지웠습니다. 기록은 그대로 남아 있습니다.`)
+      apply(await api.deleteWikiSection(subjectType, subjectId, section.key, purge))
+      success(
+        purge
+          ? `'${section.title}' 섹션과 그 기록을 모두 지웠습니다.`
+          : `'${section.title}' 섹션을 지웠습니다. 기록은 그대로 남아 있습니다.`,
+      )
     } catch (cause) {
       fromError(cause, '섹션을 지우지 못했습니다.')
     } finally {
@@ -159,6 +176,45 @@ export function WikiSubject() {
     } catch (cause) {
       fromError(cause, '취소하지 못했습니다.')
     } finally {
+      setBusy(false)
+    }
+  }
+
+  const removeEntry = async (entryId: string) => {
+    setBusy(true)
+    try {
+      await api.deleteChronicleEntry(entryId)
+      await load()
+      success('기록을 삭제했습니다.')
+    } catch (cause) {
+      fromError(cause, '삭제하지 못했습니다.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const clearSection = async (section: WikiSection) => {
+    setBusy(true)
+    try {
+      apply(await api.clearWikiSection(subjectType, subjectId, section.key))
+      await refresh()
+      success(`'${section.title}' 내용을 지웠습니다.`)
+    } catch (cause) {
+      fromError(cause, '내용을 지우지 못했습니다.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const removePage = async () => {
+    setBusy(true)
+    try {
+      await api.deleteWikiPage(subjectType, subjectId)
+      await refresh()
+      success(`'${page?.title}' 문서를 삭제했습니다.`)
+      navigate('/wiki')
+    } catch (cause) {
+      fromError(cause, '문서를 삭제하지 못했습니다.')
       setBusy(false)
     }
   }
@@ -207,9 +263,21 @@ export function WikiSubject() {
             <span className="font-mono">{page.subject_id}</span>
           </p>
         </div>
-        <Button icon={Plus} onClick={() => setAddingSection(true)} disabled={busy}>
-          섹션 추가
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          <Button icon={Plus} onClick={() => setAddingSection(true)} disabled={busy}>
+            섹션 추가
+          </Button>
+          {deletable(page.subject_type) && (
+            <Button
+              variant="danger"
+              icon={Trash2}
+              onClick={() => setDeletingPage(true)}
+              disabled={busy}
+            >
+              문서 삭제
+            </Button>
+          )}
+        </div>
       </div>
 
       {page.retired && (
@@ -279,9 +347,14 @@ export function WikiSubject() {
           subjectType={page.subject_type}
           busy={busy}
           onEdit={() => openEditor(section)}
-          onDelete={() => setDeletingSection(section)}
+          onDelete={() => {
+            setPurgeSection(false)
+            setDeletingSection(section)
+          }}
           onRetract={(entry) => void retract(entry.entry_id)}
           onRestore={(entry) => void restore(entry.entry_id)}
+          onDeleteEntry={setDeletingEntry}
+          onClear={() => setClearingSection(section)}
         />
       ))}
 
@@ -380,14 +453,73 @@ export function WikiSubject() {
       <ConfirmDialog
         open={deletingSection !== null}
         onClose={() => setDeletingSection(null)}
-        onConfirm={() => deletingSection && void removeSection(deletingSection)}
+        onConfirm={() => deletingSection && void removeSection(deletingSection, purgeSection)}
         title={`'${deletingSection?.title}' 섹션을 지울까요?`}
         confirmLabel="섹션 지우기"
         message={
           <>
             문서에서 이 섹션이 사라집니다.
+            <label className="mt-3 flex cursor-pointer items-center gap-2 text-ink">
+              <input
+                type="checkbox"
+                className="size-4 accent-bad"
+                checked={purgeSection}
+                onChange={(event) => setPurgeSection(event.target.checked)}
+              />
+              이 섹션의 기록도 함께 삭제
+            </label>
             <p className="mt-2 text-ink-muted">
-              지금까지의 기록은 지워지지 않습니다. 같은 이름으로 다시 만들면 그대로 돌아옵니다.
+              {purgeSection
+                ? '기록까지 모두 지워지며 되돌릴 수 없습니다.'
+                : '지금까지의 기록은 지워지지 않습니다. 같은 이름으로 다시 만들면 그대로 돌아옵니다.'}
+            </p>
+          </>
+        }
+      />
+
+      <ConfirmDialog
+        open={clearingSection !== null}
+        onClose={() => setClearingSection(null)}
+        onConfirm={() => clearingSection && void clearSection(clearingSection)}
+        title={`'${clearingSection?.title}' 내용을 지울까요?`}
+        confirmLabel="내용 지우기"
+        message={
+          <>
+            <p>
+              이 섹션의 지금 값과 내력이 모두 지워져 빈칸이 됩니다
+              {clearingSection?.bound_field ? ' (인물·세계관 설정에 적힌 값도 함께 비워집니다)' : ''}.
+              다음 회차부터 AI도 이 내용을 보지 않습니다.
+            </p>
+            <p className="mt-2 text-ink-muted">
+              되돌릴 수 없습니다. 기록 한 줄만 지우시려면 내력에서 그 줄의 삭제 버튼을 쓰세요.
+            </p>
+          </>
+        }
+      />
+
+      <ConfirmDialog
+        open={deletingPage}
+        onClose={() => setDeletingPage(false)}
+        onConfirm={() => void removePage()}
+        title={`'${page.title}' 문서를 삭제할까요?`}
+        confirmLabel="문서 삭제"
+        message={deletePageMessage(page.subject_type)}
+      />
+
+      <ConfirmDialog
+        open={deletingEntry !== null}
+        onClose={() => setDeletingEntry(null)}
+        onConfirm={() => deletingEntry && void removeEntry(deletingEntry.entry_id)}
+        title="이 기록을 삭제할까요?"
+        confirmLabel="삭제"
+        message={
+          <>
+            <p className="rounded-lg border border-line bg-white/2 p-3 whitespace-pre-wrap text-ink">
+              {deletingEntry?.value}
+            </p>
+            <p className="mt-2 text-ink-muted">
+              취소와 달리 흔적이 남지 않고 되돌릴 수 없습니다. 이 섹션은 바로 앞의 기록(없으면
+              처음 설정)으로 돌아갑니다. 흔적을 남기고 싶으시면 '이 기록 취소'를 쓰세요.
             </p>
           </>
         }
@@ -424,6 +556,8 @@ function SectionPanel({
   onDelete,
   onRetract,
   onRestore,
+  onDeleteEntry,
+  onClear,
 }: {
   section: WikiSection
   subjectType: SubjectType
@@ -432,6 +566,8 @@ function SectionPanel({
   onDelete: () => void
   onRetract: (entry: WikiSection['entries'][number]) => void
   onRestore: (entry: WikiSection['entries'][number]) => void
+  onDeleteEntry: (entry: WikiSection['entries'][number]) => void
+  onClear: () => void
 }) {
   const isLog = section.kind === 'log'
   // A section that has never moved opens closed: the interesting ones are the
@@ -465,6 +601,15 @@ function SectionPanel({
             onClick={onEdit}
             disabled={busy}
           />
+          {(section.current.trim() !== '' || section.entries.length > 0) && (
+            <IconButton
+              icon={Eraser}
+              title="내용 지우기"
+              variant="danger"
+              onClick={onClear}
+              disabled={busy}
+            />
+          )}
           {section.author_made && (
             <IconButton icon={Trash2} title="섹션 지우기" variant="danger" onClick={onDelete} disabled={busy} />
           )}
@@ -488,6 +633,7 @@ function SectionPanel({
             busy={busy}
             onRetract={onRetract}
             onRestore={onRestore}
+            onDelete={onDeleteEntry}
           />
         </div>
       )}

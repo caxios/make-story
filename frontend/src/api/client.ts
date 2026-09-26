@@ -133,6 +133,12 @@ export const getProject = () => request<Project>('/api/project')
 export const saveProject = (project: Project) =>
   request<Project>('/api/project', { method: 'PUT', body: project })
 
+/**
+ * Start a new work: world, cast, queue, wiki and memory are cleared. The
+ * writing style and a concept session in progress are kept.
+ */
+export const resetProject = () => request<Project>('/api/project/reset', { method: 'POST' })
+
 export const getStats = () => request<ProjectStats>('/api/project/stats')
 
 /**
@@ -553,9 +559,10 @@ export const deleteWikiSection = (
   subjectType: SubjectType,
   subjectId: string,
   sectionKey: string,
+  purge = false,
 ) =>
   request<WikiPage>(
-    `/api/wiki/${subjectType}/${encodeURIComponent(subjectId)}/sections/${encodeURIComponent(sectionKey)}`,
+    `/api/wiki/${subjectType}/${encodeURIComponent(subjectId)}/sections/${encodeURIComponent(sectionKey)}${purge ? '?purge=true' : ''}`,
     { method: 'DELETE' },
   )
 
@@ -605,6 +612,28 @@ export const retractChronicleEntry = (entryId: string) =>
 
 export const restoreChronicleEntry = (entryId: string) =>
   request<ChronicleEntry>(`/api/wiki/entries/${entryId}/restore`, { method: 'POST' })
+
+/** Delete an entry outright — no struck-through line is left behind. */
+/** Empty a section: its history and the setting underneath it. */
+export const clearWikiSection = (
+  subjectType: SubjectType,
+  subjectId: string,
+  sectionKey: string,
+) =>
+  request<WikiPage>(
+    `/api/wiki/${subjectType}/${encodeURIComponent(subjectId)}/sections/${encodeURIComponent(sectionKey)}/content`,
+    { method: 'DELETE' },
+  )
+
+/** Delete a page and the character, place or rule it is about. */
+export const deleteWikiPage = (subjectType: SubjectType, subjectId: string) =>
+  request<{ title: string; entries: number }>(
+    `/api/wiki/${subjectType}/${encodeURIComponent(subjectId)}`,
+    { method: 'DELETE' },
+  )
+
+export const deleteChronicleEntry = (entryId: string) =>
+  request<ChronicleEntry>(`/api/wiki/entries/${entryId}`, { method: 'DELETE' })
 
 /** Correct what an entry says. Where it sits in history does not move. */
 export const editChronicleEntry = (

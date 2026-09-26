@@ -13,6 +13,7 @@ import {
   MapPin,
   Scale,
   ScrollText,
+  Trash2,
   Users,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -21,8 +22,19 @@ import { useNavigate } from 'react-router-dom'
 import * as api from '@/api/client'
 import { ChronicleReview } from '@/components/ChronicleReview'
 import { useToast } from '@/components/ToastContext'
-import { Badge, Button, EmptyState, PageHeader, Panel, TextField } from '@/components/ui'
+import { deletable, deletePageMessage } from '@/components/wikiDelete'
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  IconButton,
+  PageHeader,
+  Panel,
+  TextField,
+} from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { useProject } from '@/state/ProjectContext'
 import type { SubjectType, WikiSubjectRow } from '@/types/storyweaver'
 
 const GROUPS: { type: SubjectType; label: string; icon: typeof Users }[] = [
@@ -36,7 +48,8 @@ const GROUPS: { type: SubjectType; label: string; icon: typeof Users }[] = [
 ]
 
 export function Wiki() {
-  const { fromError } = useToast()
+  const { success, fromError } = useToast()
+  const { refresh } = useProject()
   const navigate = useNavigate()
 
   const [rows, setRows] = useState<WikiSubjectRow[] | null>(null)
@@ -46,6 +59,7 @@ export function Wiki() {
   // otherwise the proposals sit there counting for nothing and unreachable.
   const [waiting, setWaiting] = useState(0)
   const [reviewing, setReviewing] = useState(false)
+  const [deleting, setDeleting] = useState<WikiSubjectRow | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -64,6 +78,17 @@ export function Wiki() {
   useEffect(() => {
     void load()
   }, [load])
+
+  const remove = async (row: WikiSubjectRow) => {
+    try {
+      await api.deleteWikiPage(row.subject_type, row.subject_id)
+      await refresh()
+      await load()
+      success(`'${row.title}' 문서를 삭제했습니다.`)
+    } catch (cause) {
+      fromError(cause, '문서를 삭제하지 못했습니다.')
+    }
+  }
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -140,18 +165,21 @@ export function Wiki() {
             <Panel key={type} title={`${label} (${group.length})`}>
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {group.map((row) => (
-                  <button
+                  <div
                     key={`${row.subject_type}:${row.subject_id}`}
+                    className={cn(
+                      'group flex items-start gap-1 rounded-lg border border-line',
+                      'transition-colors hover:border-line-strong hover:bg-white/3',
+                    )}
+                  >
+                  <button
                     type="button"
                     onClick={() =>
                       navigate(
                         `/wiki/${row.subject_type}/${encodeURIComponent(row.subject_id)}`,
                       )
                     }
-                    className={cn(
-                      'flex items-start gap-3 rounded-lg border border-line p-3 text-left',
-                      'transition-colors hover:border-line-strong hover:bg-white/3',
-                    )}
+                    className="flex min-w-0 flex-1 items-start gap-3 p-3 text-left"
                   >
                     <Icon className="mt-0.5 size-4 shrink-0 text-ink-muted" />
                     <span className="min-w-0 flex-1">
@@ -173,12 +201,31 @@ export function Wiki() {
                       </span>
                     </span>
                   </button>
+                  {deletable(row.subject_type) && (
+                    <IconButton
+                      icon={Trash2}
+                      title="문서 삭제"
+                      variant="danger"
+                      className="m-1.5"
+                      onClick={() => setDeleting(row)}
+                    />
+                  )}
+                  </div>
                 ))}
               </div>
             </Panel>
           )
         })
       )}
+
+      <ConfirmDialog
+        open={deleting !== null}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => deleting && void remove(deleting)}
+        title={`'${deleting?.title}' 문서를 삭제할까요?`}
+        confirmLabel="문서 삭제"
+        message={deleting && deletePageMessage(deleting.subject_type)}
+      />
 
       {rows.length > 0 && filtered.length === 0 && (
         <Panel>
