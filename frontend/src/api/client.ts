@@ -11,6 +11,7 @@ import type {
   ChronicleEntry,
   ConceptCommitResult,
   ConceptSessionView,
+  ConceptSyncResult,
   CharacterGraph,
   CharacterMemoryState,
   CharacterProfile,
@@ -30,6 +31,10 @@ import type {
   ProjectStats,
   Rule,
   SectionKind,
+  StoryConcept,
+  StoryStructure,
+  StructureDraft,
+  StructureView,
   SubjectType,
   Telemetry,
   WikiPage,
@@ -256,6 +261,37 @@ export const moveEpisode = (episodeNumber: number, offset: number) =>
     body: { offset },
   })
 
+/**
+ * Let the model write the next episode's outline from the wiki, every episode
+ * so far, the open threads and the work's direction. Nothing is saved.
+ */
+export const draftNextEpisode = (direction = '') =>
+  request<{ episode_number: number; author_storyline: string }>('/api/episodes/draft-next', {
+    method: 'POST',
+    body: { direction },
+  })
+
+/**
+ * Plan the next `count` episodes (up to twenty) as one run, paced by the work's
+ * structure. Nothing is saved.
+ */
+export const draftEpisodeBatch = (count = 20, direction = '') =>
+  request<{ episodes: { episode_number: number; author_storyline: string }[] }>(
+    '/api/episodes/draft-batch',
+    { method: 'POST', body: { count, direction } },
+  )
+
+/** Queue several outlines at once, in order, at the end of the queue. */
+export const addEpisodes = (episodes: { author_storyline: string; title?: string }[]) =>
+  request<Episode[]>('/api/episodes/many', { method: 'POST', body: { episodes } })
+
+/** Delete several episodes at once; the queue is renumbered once. */
+export const deleteEpisodes = (episodeNumbers: number[]) =>
+  request<Episode[]>('/api/episodes/delete-many', {
+    method: 'POST',
+    body: { episode_numbers: episodeNumbers },
+  })
+
 export const addEpisodesBatch = (text: string, separator = '---') =>
   request<Episode[]>('/api/episodes/batch', { method: 'POST', body: { text, separator } })
 
@@ -464,16 +500,17 @@ export const proposeConcepts = (seed = '', count = 3) =>
  * spread: two dozen lines written to be thrown away, and asking for all of it
  * at once is what made the model starve the last concept.
  */
-export const chooseConcept = (index: number, episodes = 12) =>
+export const chooseConcept = (index: number, episodes = 12, targetEpisodes = 200) =>
   request<ConceptSessionView>('/api/concept/choose', {
     method: 'POST',
-    body: { index, episodes },
+    body: { index, episodes, target_episodes: targetEpisodes },
   })
 
-export const redrawOutline = (episodes: number) =>
+/** Lay the work out again at `targetEpisodes`, and redraw its opening to fit. */
+export const redrawOutline = (episodes: number, targetEpisodes?: number) =>
   request<ConceptSessionView>('/api/concept/outline', {
     method: 'POST',
-    body: { episodes },
+    body: { episodes, target_episodes: targetEpisodes ?? null },
   })
 
 /** Revise the chosen concept once. As many times as the author wants. */
@@ -503,11 +540,61 @@ export const talkConcept = (message: string) =>
  * `episodes` of 0 leaves the chapter outline undrawn — a second model call the
  * author may well want to spend after reshaping the concept, not before.
  */
-export const buildConceptFromTalk = (episodes = 0) =>
+export const buildConceptFromTalk = (episodes = 0, targetEpisodes?: number) =>
   request<ConceptSessionView>('/api/concept/talk/build', {
     method: 'POST',
-    body: { episodes },
+    body: { episodes, target_episodes: targetEpisodes ?? null },
   })
+
+// ==========================================================================
+// The work's planned length and layout
+// ==========================================================================
+
+export const getStructure = () => request<StructureView>('/api/structure')
+
+/** The author's own edit. Parts are closed up to cover 1..target on save. */
+export const saveStructure = (structure: StoryStructure) =>
+  request<StructureView>('/api/structure', { method: 'PUT', body: structure })
+
+/**
+ * Propose a layout for a new length, and new outlines for the episodes not yet
+ * written. Nothing is saved.
+ */
+export const draftStructure = (
+  targetEpisodes: number,
+  instruction = '',
+  rewriteUpcoming = true,
+) =>
+  request<StructureDraft>('/api/structure/draft', {
+    method: 'POST',
+    body: {
+      target_episodes: targetEpisodes,
+      instruction,
+      rewrite_upcoming: rewriteUpcoming,
+    },
+  })
+
+/** Save a layout and the outlines the author kept. */
+export const applyStructure = (
+  structure: StoryStructure,
+  episodes: { episode_number: number; author_storyline: string }[],
+) =>
+  request<StructureView>('/api/structure/apply', {
+    method: 'POST',
+    body: { structure, episodes },
+  })
+
+/** Replace the concept with the author's own edit. Works after commit too. */
+export const editConcept = (concept: StoryConcept) =>
+  request<ConceptSessionView>('/api/concept/chosen', { method: 'PUT', body: { concept } })
+
+/** What carrying the edits into the committed work would do. Nothing is written. */
+export const previewConceptSync = () =>
+  request<ConceptSyncResult>('/api/concept/sync/preview', { method: 'POST' })
+
+/** Carry what changed in the concept since it was last applied into the work. */
+export const syncConcept = () =>
+  request<ConceptSyncResult>('/api/concept/sync', { method: 'POST' })
 
 /** Throw the conversation away, keeping whatever it already produced. */
 export const clearConceptTalk = () =>

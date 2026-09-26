@@ -33,12 +33,16 @@ from storyweaver.models.concept import (
     ConceptProposals,
     StoryConcept,
 )
+from storyweaver.models.structure import StoryStructure, describe_structure
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_COUNT = 3
 # How many chapters an outline covers when the author does not say.
 DEFAULT_EPISODES = 12
+# How long the work is planned to run when the author does not say. A typical
+# serialised web novel; the author sets their own on the planning screen.
+DEFAULT_TARGET = 200
 # Long prose is reported as "changed" rather than "A → B": an arc is five
 # paragraphs, and a diff line nobody can read is a diff line nobody reads.
 SHORT_VALUE = 40
@@ -130,16 +134,65 @@ def is_whole(concept: StoryConcept) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def build_outline_prompt(concept: StoryConcept, count: int = DEFAULT_EPISODES) -> str:
+# Without a planned length, the opening outline is the whole book in miniature.
+# This used to be the only mode, and it is why a serial meant to run for
+# hundreds of chapters reached its ending by chapter twelve.
+WHOLE_BOOK_PACING = (
+    "No overall length has been set, so this outline is the whole arc at chapter "
+    "resolution: arrive at its beginning, pass through its middle, and land on the "
+    "ending as written."
+)
+
+
+def outline_pacing(count: int, structure: StoryStructure | None) -> str:
+    """What the opening outline must cover, given how long the work is."""
+    if structure is None:
+        return WHOLE_BOOK_PACING
+
+    target = structure.target_episodes
+    lines = [
+        f"**This work is planned at about {target} episodes.** These {count} episodes "
+        f"are only the opening — about {round(100 * count / target)}% of the book. "
+        "They are paced for that position: nothing in them may reach past where the "
+        "layout below puts the story by episode " + f"{count}.",
+        "",
+        "The layout of the whole work:",
+        "",
+        describe_structure(structure),
+    ]
+    covered = [p for p in structure.parts if p.start <= count]
+    if covered:
+        last = covered[-1]
+        lines += [
+            "",
+            f"Episodes 1 to {count} fall inside {', '.join(repr(p.title) for p in covered)}. "
+            f"Part '{last.title}' runs to episode {last.end}, so by episode {count} it is "
+            f"only {round(100 * (count - last.start + 1) / max(1, last.length))}% done — "
+            "its own goals are still ahead. Do not reach the ending, do not resolve the "
+            "central conflict, and pay off only threads the layout pays off within these "
+            "episodes. Plant the threads the layout plants here.",
+        ]
+    return "\n".join(lines)
+
+
+def build_outline_prompt(
+    concept: StoryConcept,
+    count: int = DEFAULT_EPISODES,
+    structure: StoryStructure | None = None,
+) -> str:
     return render_prompt(
         "concept_outline",
         concept=concept.model_dump_json(indent=2),
         count=count,
+        pacing=outline_pacing(count, structure),
     )
 
 
 def outline(
-    concept: StoryConcept, count: int = DEFAULT_EPISODES, llm=None
+    concept: StoryConcept,
+    count: int = DEFAULT_EPISODES,
+    llm=None,
+    structure: StoryStructure | None = None,
 ) -> StoryConcept:
     """Draw up the chapter outline for the concept the author kept.
 
@@ -147,11 +200,15 @@ def outline(
     spread of three is thirty-six lines written to throw away twenty-four — and
     asking for all of it in one call is what made the model ration its output
     and return a third concept that was a title and nothing else.
+
+    With a `structure`, these are the opening episodes of a work of that
+    length, paced to where the layout puts them. Without one, they are the
+    whole book.
     """
     if count < 1:
         raise ValueError("an outline needs at least one episode")
 
-    prompt = build_outline_prompt(concept, count)
+    prompt = build_outline_prompt(concept, count, structure)
     model = telemetry.meter(llm or get_llm(stage="concept"), "concept")
     result: ConceptOutline = model.with_structured_output(ConceptOutline).invoke(prompt)
 
@@ -436,6 +493,7 @@ def describe_changes(before: StoryConcept, after: StoryConcept) -> list[str]:
 __all__ = [
     "DEFAULT_COUNT",
     "DEFAULT_EPISODES",
+    "DEFAULT_TARGET",
     "TRANSCRIPT_WINDOW",
     "build_distill_prompt",
     "build_outline_prompt",

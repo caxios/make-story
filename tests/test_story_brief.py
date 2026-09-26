@@ -22,7 +22,6 @@ from storyweaver.agents.writer import _character_sheets
 from storyweaver.memory import summarizer
 from storyweaver.memory.chronicle_store import ChronicleStore
 from storyweaver.wiki import STORY_SUBJECT_ID, story_brief
-from storyweaver.wiki.brief import ARC_CHARS, LOGLINE_CHARS
 
 ARC = "1부 만남과 은폐, 2부 사념세계 진입, 3부 두 세계의 경계가 무너짐"
 ENDING = "동혁이 사념세계에 남고 시월이 현세계로 건너온다"
@@ -84,14 +83,16 @@ def test_the_brief_does_not_carry_the_premise_or_the_episode_outline(planned):
     assert "시월이 찾아온다" not in brief
 
 
-def test_a_long_arc_is_trimmed_rather_than_crowding_out_the_episode(chronicle):
-    """A fifty-episode arc would otherwise dwarf the chapter being planned."""
-    chronicle.record("story", STORY_SUBJECT_ID, "arc", "가" * 5000, source="author")
+def test_a_long_arc_reaches_the_planner_whole(chronicle):
+    """A serial planned across hundreds of episodes has a long arc, and cutting
+    it dropped exactly the later parts a planning stage steers toward."""
+    arc = "가" * 4000 + "마지막 부의 전개"
+    chronicle.record("story", STORY_SUBJECT_ID, "arc", arc, source="author")
 
     brief = story_brief(chronicle)
 
-    assert len(brief) < ARC_CHARS + LOGLINE_CHARS
-    assert brief.endswith("…")
+    assert arc in brief
+    assert "…" not in brief
 
 
 def test_a_retracted_plan_is_not_in_the_brief(chronicle):

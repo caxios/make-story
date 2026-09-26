@@ -119,7 +119,6 @@ def test_the_outline_prompt_says_the_lines_are_not_plans():
     prompt = agent.build_outline_prompt(_concept())
 
     assert "These are not plans" in prompt
-    assert "too fine" in prompt
 
 
 def test_asking_for_nothing_is_refused():

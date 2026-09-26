@@ -23,10 +23,11 @@ import logging
 
 from typing import Annotated
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, StringConstraints
 
 from storyweaver.agents import concept as agent
+from storyweaver.agents import structure as layout
 from storyweaver.api import deps
 from storyweaver.concept_store import ConceptStore
 from storyweaver.models.concept import (
@@ -35,7 +36,10 @@ from storyweaver.models.concept import (
     ConceptTurn,
     StoryConcept,
 )
+from storyweaver.models.structure import MAX_TARGET, StoryStructure
+from storyweaver.ui.project import Project
 from storyweaver.wiki import commit_concept
+from storyweaver.wiki.sync import sync_concept
 
 logger = logging.getLogger(__name__)
 
@@ -54,13 +58,20 @@ class ProposeRequest(BaseModel):
     count: int = Field(default=agent.DEFAULT_COUNT, ge=1, le=MAX_PROPOSALS)
 
 
+Target = Annotated[int, Field(ge=1, le=MAX_TARGET)]
+
+
 class ChooseRequest(BaseModel):
     index: int = Field(ge=0, description="Which of the proposals to keep")
     episodes: int = Field(default=agent.DEFAULT_EPISODES, ge=1, le=MAX_EPISODES)
+    # How long the whole work is meant to run. The opening `episodes` are paced
+    # as the start of a work this long, not as the whole of it.
+    target_episodes: Target = agent.DEFAULT_TARGET
 
 
 class OutlineRequest(BaseModel):
     episodes: int = Field(default=agent.DEFAULT_EPISODES, ge=1, le=MAX_EPISODES)
+    target_episodes: Target | None = None
 
 
 class RefineRequest(BaseModel):
@@ -75,6 +86,7 @@ class DistillRequest(BaseModel):
     """Turning the conversation into a concept, optionally with its outline."""
 
     episodes: int = Field(default=0, ge=0, le=MAX_EPISODES)
+    target_episodes: Target | None = None
 
 
 class SessionView(BaseModel):
@@ -82,6 +94,30 @@ class SessionView(BaseModel):
 
     session: ConceptSession | None = None
     changed: list[str] = Field(default_factory=list)
+    # Committed, and edited since it was last carried into the work.
+    unsynced: bool = False
+
+    def model_post_init(self, _context) -> None:
+        session = self.session
+        self.unsynced = bool(
+            session is not None
+            and session.status == "committed"
+            and session.committed_concept is not None
+            and session.chosen is not None
+            and session.chosen != session.committed_concept
+        )
+
+
+class EditRequest(BaseModel):
+    """The author's own edit of the whole concept, field by field."""
+
+    concept: StoryConcept
+
+
+class SyncResponse(BaseModel):
+    applied: list[str] = Field(default_factory=list)
+    skipped: list[str] = Field(default_factory=list)
+    session: ConceptSession | None = None
 
 
 class CommitResponse(BaseModel):
@@ -117,9 +153,42 @@ def _require_chosen(session: ConceptSession) -> StoryConcept:
     return session.chosen
 
 
+def _keep_baseline(session: ConceptSession) -> None:
+    """Before the first edit after commit, remember what the work was given.
+
+    Sessions committed before this existed have no baseline; the concept as it
+    stands right before the edit is the best one available.
+    """
+    if session.status == "committed" and session.committed_concept is None:
+        session.committed_concept = session.chosen
+
+
 def _model_failed(error: Exception, what: str) -> HTTPException:
     logger.exception("The concept agent failed while %s", what)
     return HTTPException(status_code=502, detail=f"기획을 {what} 실패했습니다: {error}")
+
+
+def _check_lengths(episodes: int, target: int) -> None:
+    if episodes > target:
+        raise HTTPException(
+            status_code=422,
+            detail=f"처음 구상할 회차({episodes}화)가 전체 분량({target}화)보다 많습니다",
+        )
+
+
+def _lay_out_and_outline(
+    concept: StoryConcept, episodes: int, target: int
+) -> tuple[StoryConcept, StoryStructure]:
+    """Two calls: the whole work's layout, then its opening paced by it."""
+    try:
+        structure = layout.lay_out(target, layout.describe_concept(concept))
+    except Exception as error:  # noqa: BLE001
+        raise _model_failed(error, f"{target}화 분량으로 배치하는 데") from error
+    try:
+        outlined = agent.outline(concept, count=episodes, structure=structure)
+    except Exception as error:  # noqa: BLE001
+        raise _model_failed(error, "회차로 펼치는 데") from error
+    return outlined, structure
 
 
 # ---------------------------------------------------------------------------
@@ -184,19 +253,24 @@ def choose(body: ChooseRequest) -> SessionView:
             detail=f"{body.index}번 제안이 없습니다 (0~{len(session.proposals) - 1})",
         )
 
-    chosen = session.proposals[body.index]
-    try:
-        chosen = agent.outline(chosen, count=body.episodes)
-    except Exception as error:  # noqa: BLE001
-        raise _model_failed(error, "회차로 펼치는 데") from error
+    _check_lengths(body.episodes, body.target_episodes)
+    chosen, structure = _lay_out_and_outline(
+        session.proposals[body.index], body.episodes, body.target_episodes
+    )
 
     session.chosen = chosen
+    session.structure = structure
+    session.target_episodes = body.target_episodes
     session.status = "refining"
     session.turns.append(
         ConceptTurn(
             turn=len(session.turns),
             instruction=f"'{chosen.title}'(으)로 시작",
-            changed=[f"회차 구상 {len(chosen.episodes)}개를 만들었습니다"],
+            changed=[
+                f"전체 {structure.target_episodes}화를 {len(structure.parts)}부로 나누고 "
+                f"떡밥 {len(structure.threads)}개를 배치했습니다",
+                f"처음 {len(chosen.episodes)}화의 회차 구상을 만들었습니다",
+            ],
         )
     )
     return SessionView(session=_store().save(session), changed=session.turns[-1].changed)
@@ -207,18 +281,25 @@ def redraw_outline(body: OutlineRequest = Body(default_factory=OutlineRequest)) 
     """Draw the chapter outline again, at a different length."""
     session = _require_session()
     chosen = _require_chosen(session)
+    target = body.target_episodes or session.target_episodes or agent.DEFAULT_TARGET
+    _check_lengths(body.episodes, target)
 
-    try:
-        redrawn = agent.outline(chosen, count=body.episodes)
-    except Exception as error:  # noqa: BLE001
-        raise _model_failed(error, "회차로 펼치는 데") from error
+    # The layout is drawn again too: a redraw is usually because the length
+    # changed, or because the concept was refined since it was last laid out.
+    redrawn, structure = _lay_out_and_outline(chosen, body.episodes, target)
 
-    changed = agent.describe_changes(chosen, redrawn)
+    changed = [
+        f"전체 {target}화를 {len(structure.parts)}부로 나누고 "
+        f"떡밥 {len(structure.threads)}개를 배치했습니다",
+        *agent.describe_changes(chosen, redrawn),
+    ]
     session.chosen = redrawn
+    session.structure = structure
+    session.target_episodes = target
     session.turns.append(
         ConceptTurn(
             turn=len(session.turns),
-            instruction=f"회차 구상을 {body.episodes}개로 다시",
+            instruction=f"전체 {target}화 기준으로 처음 {body.episodes}화 구상을 다시",
             changed=changed,
         )
     )
@@ -236,6 +317,7 @@ def refine(body: RefineRequest) -> SessionView:
     session = _require_session()
     chosen = _require_chosen(session)
 
+    _keep_baseline(session)
     try:
         revised, changed = agent.refine(chosen, body.instruction)
     except Exception as error:  # noqa: BLE001
@@ -302,10 +384,10 @@ def build_from_talk(
         raise _model_failed(error, "정리하는 데") from error
 
     if body.episodes:
-        try:
-            concept = agent.outline(concept, count=body.episodes)
-        except Exception as error:  # noqa: BLE001
-            raise _model_failed(error, "회차로 펼치는 데") from error
+        target = body.target_episodes or session.target_episodes or agent.DEFAULT_TARGET
+        _check_lengths(body.episodes, target)
+        concept, session.structure = _lay_out_and_outline(concept, body.episodes, target)
+        session.target_episodes = target
 
     changed = [f"대화 {len(session.messages)}개를 '{concept.title}'(으)로 정리했습니다"]
     # What the conversation never settled, said plainly rather than left as a
@@ -331,6 +413,80 @@ def clear_talk() -> SessionView:
     session = _require_session()
     session.messages = []
     return SessionView(session=store.save(session))
+
+
+# ---------------------------------------------------------------------------
+# Editing by hand
+# ---------------------------------------------------------------------------
+
+
+@router.put("/chosen", response_model=SessionView)
+def edit_chosen(body: EditRequest) -> SessionView:
+    """Replace the concept with the author's own edit. No model call.
+
+    Refining asks the model to change something; this is for when the author
+    knows exactly what they want written — a name, a line of the arc, one
+    episode. Works before commit and after it.
+    """
+    session = _require_session()
+    chosen = _require_chosen(session)
+    _keep_baseline(session)
+
+    edited = agent._tidy(body.concept)
+    if edited == chosen:
+        return SessionView(session=session, changed=["바뀐 것이 없습니다"])
+    changed = agent.describe_changes(chosen, edited)
+
+    session.chosen = edited
+    session.turns.append(
+        ConceptTurn(turn=len(session.turns), instruction="직접 수정", changed=changed)
+    )
+    return SessionView(session=_store().save(session), changed=changed)
+
+
+# ---------------------------------------------------------------------------
+# Carrying edits into a committed work
+# ---------------------------------------------------------------------------
+
+
+def _sync_pair(session: ConceptSession) -> tuple[StoryConcept, StoryConcept]:
+    if session.status != "committed":
+        raise HTTPException(status_code=409, detail="아직 작품에 반영하지 않은 기획입니다")
+    chosen = _require_chosen(session)
+    return session.committed_concept or chosen, chosen
+
+
+@router.post("/sync/preview", response_model=SyncResponse)
+def preview_sync(project: Project = Depends(deps.get_project)) -> SyncResponse:
+    """What carrying the edits over would do. Nothing is written."""
+    session = _require_session()
+    before, after = _sync_pair(session)
+    report = sync_concept(project.model_copy(deep=True), None, before, after)
+    return SyncResponse(**report.as_dict(), session=session)
+
+
+@router.post("/sync", response_model=SyncResponse)
+def apply_sync() -> SyncResponse:
+    """Carry what changed in the concept since it was last applied into the work."""
+    session = _require_session()
+    before, after = _sync_pair(session)
+
+    with deps.write_lock():
+        project = deps.get_project()
+        memory = deps.get_memory()
+        report = sync_concept(
+            project, memory.chronicle if memory is not None else None, before, after
+        )
+        deps.save_project(project)
+
+    session.committed_concept = after
+    if report.applied:
+        session.turns.append(
+            ConceptTurn(
+                turn=len(session.turns), instruction="작품에 반영", changed=report.applied
+            )
+        )
+    return SyncResponse(**report.as_dict(), session=_store().save(session))
 
 
 # ---------------------------------------------------------------------------
@@ -369,10 +525,12 @@ def commit(force: bool = Query(default=False)) -> CommitResponse:
             chosen,
             session.turns,
             session.messages,
+            structure=session.structure,
         )
         deps.save_project(project)
 
     session.status = "committed"
+    session.committed_concept = chosen
     from datetime import datetime, timezone
 
     session.committed_at = datetime.now(timezone.utc)

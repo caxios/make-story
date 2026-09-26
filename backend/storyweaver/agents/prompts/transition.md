@@ -13,6 +13,9 @@ What it needs to accomplish: {next_objective}
 
 {next_head}
 
+## The Episodes Around This One
+{story_flow}
+
 ## Your Task
 Write ONE or TWO sentences that carry the reader from the first scene to the
 second. Handle whatever actually changes — time, place, or who we are with — and

@@ -8,6 +8,7 @@ from collections.abc import Iterable, Mapping
 from pydantic import BaseModel, Field
 
 from storyweaver.agents import context
+from storyweaver.agents.flow import flow_block
 from storyweaver.agents.prompts import render_prompt
 from storyweaver import telemetry
 from storyweaver.llm import get_llm
@@ -57,6 +58,7 @@ def build_prompt(
     max_scenes: int = DEFAULT_MAX_SCENES,
     memory_context: str = "",
     story_brief: str = "",
+    story_flow: str = "",
 ) -> str:
     """Render the Director prompt. Exposed separately so it can be inspected and tested."""
     char_map = context.as_character_map(characters)
@@ -72,12 +74,15 @@ def build_prompt(
         world_overview=world.overview,
         world_rules=context.format_rules(world.rules),
         locations=context.format_locations(world.locations),
-        characters=context.format_character_summaries(list(char_map.values())),
+        # The full planning view — role, secrets, background, relationships by
+        # name. A one-line blurb is enough to cast a scene, not to plot one.
+        characters=context.format_cast_for_planning(char_map.values()),
         author_storyline=episode.author_storyline,
         # Where the whole work is going. The planning stages get this; the
         # Character Agent, the Writer and the Lore Checker must not — a
         # character who has read the ending stops being surprised by it.
         story_brief=story_brief or NO_STORY_BRIEF,
+        story_flow=flow_block(story_flow),
     )
 
 
@@ -148,6 +153,7 @@ def decompose_episode(
     max_scenes: int = DEFAULT_MAX_SCENES,
     memory_context: str = "",
     story_brief: str = "",
+    story_flow: str = "",
 ) -> list[Scene]:
     """Break `episode.author_storyline` into ordered, validated `Scene`s."""
     char_map = context.as_character_map(characters)
@@ -155,7 +161,8 @@ def decompose_episode(
         raise ValueError("decompose_episode needs at least one character profile")
 
     prompt = build_prompt(
-        episode, world, char_map, min_scenes, max_scenes, memory_context, story_brief
+        episode, world, char_map, min_scenes, max_scenes, memory_context, story_brief,
+        story_flow,
     )
     model = telemetry.meter(llm or get_llm(stage="director"), "director")
     output = model.with_structured_output(DirectorOutput).invoke(prompt)

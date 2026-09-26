@@ -22,6 +22,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from storyweaver.models.structure import StoryStructure
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -146,6 +148,15 @@ class ConceptSession(BaseModel):
     # book was arrived at is worth as much as what was arrived at.
     messages: list[ConceptMessage] = Field(default_factory=list)
     turns: list[ConceptTurn] = Field(default_factory=list)
+    # How long the work is meant to run, and how the story is laid out across
+    # that length. Drawn when the outline is, and written into the project at
+    # commit; the opening outline is paced by it.
+    target_episodes: int | None = None
+    structure: StoryStructure | None = None
+    # The concept as it was last carried into the work — at commit, and again
+    # at every sync. Editing after commit is compared against this, so only
+    # what the author changed here reaches the work (see `wiki/sync.py`).
+    committed_concept: StoryConcept | None = None
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
     committed_at: datetime | None = None

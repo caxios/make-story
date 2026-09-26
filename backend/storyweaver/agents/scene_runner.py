@@ -44,6 +44,7 @@ class SceneSimulationState(TypedDict, total=False):
     rota_index: int              # position in the round-robin, kept across detours
     interaction_log: list[dict]  # accumulated log entries
     constraints: list[str]       # Lore Checker fixes to honour on a re-run
+    story_flow: str              # the episodes around this one (see agents/flow.py)
     # --- Outputs ---
     completed: bool
     stop_reason: str
@@ -128,6 +129,7 @@ def character_act(state: SceneSimulationState, llm=None, memory=None) -> dict:
         constraints=state.get("constraints", []),
         memory_context=memory_context,
         extra_sections=extra_sections,
+        story_flow=state.get("story_flow", ""),
     )
     return {"interaction_log": state.get("interaction_log", []) + [entry.model_dump()]}
 
@@ -227,6 +229,7 @@ def simulate_scene(
     initial_log: Sequence[dict] | None = None,
     constraints: Sequence[str] = (),
     memory=None,
+    story_flow: str = "",
 ) -> dict[str, Any]:
     """Run the scene to completion and return the final graph state.
 
@@ -259,6 +262,7 @@ def simulate_scene(
         "max_turns": max_turns,
         "interaction_log": seed,
         "constraints": list(constraints),
+        "story_flow": story_flow,
         "completed": False,
         "stop_reason": "",
     }

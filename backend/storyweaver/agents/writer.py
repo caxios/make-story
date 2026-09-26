@@ -11,6 +11,7 @@ import re
 from collections.abc import Mapping, Sequence
 
 from storyweaver.agents import context
+from storyweaver.agents.flow import flow_block
 from storyweaver.agents.prompts import render_prompt
 from storyweaver import telemetry
 from storyweaver.llm import get_llm
@@ -199,6 +200,7 @@ def build_prompt(
     pacing: str = "normal",
     creativity: float | None = None,
     tone_notes: str = "",
+    story_flow: str = "",
 ) -> str:
     """Render the Writer prompt for one scene."""
     style = style or WritingStyle()
@@ -217,6 +219,7 @@ def build_prompt(
     return render_prompt(
         "writer",
         memory_context=memory_context or NO_MEMORY,
+        story_flow=flow_block(story_flow),
         previous_prose=(previous_prose[-PREVIOUS_PROSE_CHARS:] if previous_prose else NO_PREVIOUS),
         pacing=describe_pacing(pacing),
         latitude=describe_creativity(creativity),
@@ -255,6 +258,7 @@ def write_scene(
     pacing: str = "normal",
     creativity: float | None = None,
     tone_notes: str = "",
+    story_flow: str = "",
 ) -> str:
     """Write one scene as prose.
 
@@ -277,6 +281,7 @@ def write_scene(
         pacing,
         creativity,
         tone_notes,
+        story_flow,
     )
     # The instruction says how far the prose may go; the temperature decides how
     # far it does. Setting one without the other gets a model told to be daring
@@ -298,6 +303,7 @@ def write_transition(
     next_prose: str = "",
     style: WritingStyle | None = None,
     llm=None,
+    story_flow: str = "",
 ) -> str:
     """Write the sentence or two that carries the reader between two scenes.
 
@@ -315,6 +321,7 @@ def write_transition(
         next_mood=_scene_mood(next_scene),
         next_objective=next_scene.objective,
         next_head=next_prose[:PREVIOUS_PROSE_CHARS] or "(not written yet)",
+        story_flow=flow_block(story_flow),
         language=style.language,
     )
     model = telemetry.meter(llm or get_llm(stage="transition"), "transition")

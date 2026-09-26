@@ -45,6 +45,13 @@ What must happen in this scene: {beats}
 ## What You Remember From Earlier Episodes
 {memory_context}
 
+## The Story Around This Episode (the author's plan — you do not know it)
+{story_flow}
+
+You are shown this only so that what you do now fits the story around it. You
+have no knowledge of anything planned for later episodes: never hint at it,
+never act on it, and do not do now what a later episode is planned to do.
+
 ## What Has Happened So Far In This Scene
 {interaction_log}
 

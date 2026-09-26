@@ -205,6 +205,69 @@ export interface Project {
   style: WritingStyle
   /** Whether a chapter's chronicle entries wait for the author before counting. */
   review_chronicle: boolean
+  /** How long the work is planned to run and how it is laid out. */
+  structure: StoryStructure | null
+}
+
+// ==========================================================================
+// The work's planned length and layout
+// ==========================================================================
+
+/** One stretch of the work — 1부, 2부 — and what it is for. */
+export interface StoryPart {
+  title: string
+  start: number
+  end: number
+  purpose: string
+}
+
+/** A 떡밥: planted around one episode, paid off around another. */
+export interface PlannedThread {
+  name: string
+  description: string
+  plant: number
+  payoff: number
+}
+
+/** One point where a planned relationship turns. */
+export interface RelationshipTurn {
+  episode: number
+  change: string
+}
+
+/** How two people's relationship runs across the work. */
+export interface PlannedRelationship {
+  /** Two names, as the work spells them. */
+  characters: string[]
+  start: string
+  arc: string
+  turns: RelationshipTurn[]
+}
+
+export interface StoryStructure {
+  target_episodes: number
+  parts: StoryPart[]
+  threads: PlannedThread[]
+  relationships: PlannedRelationship[]
+}
+
+export interface StructureView {
+  structure: StoryStructure | null
+  next_episode: number
+  written_through: number
+  /** Where the next episode sits, as the planning stages are told it. */
+  position: string
+}
+
+export interface StructureRewrite {
+  episode_number: number
+  before: string
+  after: string
+}
+
+export interface StructureDraft {
+  structure: StoryStructure
+  episodes: StructureRewrite[]
 }
 
 export interface ProjectStats {
@@ -582,6 +645,10 @@ export interface ConceptSession {
   chosen: StoryConcept | null
   messages: ConceptMessage[]
   turns: ConceptTurn[]
+  target_episodes: number | null
+  structure: StoryStructure | null
+  /** The concept as it was last carried into the work. */
+  committed_concept: StoryConcept | null
   created_at: string
   updated_at: string
   committed_at: string | null
@@ -591,6 +658,15 @@ export interface ConceptSessionView {
   session: ConceptSession | null
   /** What the last round moved, worked out by comparing rather than asked of the model. */
   changed: string[]
+  /** Committed, and edited since it was last carried into the work. */
+  unsynced: boolean
+}
+
+/** What carrying concept edits into the work did, or would do. */
+export interface ConceptSyncResult {
+  applied: string[]
+  skipped: string[]
+  session: ConceptSession | null
 }
 
 export interface ConceptCommitResult {

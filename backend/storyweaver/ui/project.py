@@ -17,6 +17,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from storyweaver import config
+from storyweaver.models.structure import StoryStructure
 from storyweaver.storage import write_text_atomic
 from storyweaver.models import (
     CharacterProfile,
@@ -71,6 +72,10 @@ class Project(BaseModel):
     # than approve a list after every chapter. A gate that is always in the
     # way gets clicked through without being read, which is worse than none.
     review_chronicle: bool = True
+    # How long the work is meant to be and how it is laid out across that
+    # length. None for a story that was not planned that way; every stage that
+    # outlines an episode reads its position in the whole from here.
+    structure: StoryStructure | None = None
 
     # --- lookups -----------------------------------------------------------
 

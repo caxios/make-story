@@ -23,6 +23,13 @@ Rules of this world that always hold:
 ## Continuity
 {memory_context}
 
+## The Episodes Around This One
+{story_flow}
+
+Write this scene so it belongs between the episode before and the episodes
+after. Do not narrate, foreshadow heavily, or resolve anything the next episodes
+are planned for; leave the threads they pick up open.
+
 ## The Previous Scene's Closing Prose
 {previous_prose}
 

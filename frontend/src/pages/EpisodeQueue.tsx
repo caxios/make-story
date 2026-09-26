@@ -28,6 +28,7 @@ import * as api from '@/api/client'
 import { useGenerationStream } from '@/api/useGenerationStream'
 import { GenerationOverlay } from '@/components/GenerationOverlay'
 import { ChronicleReview } from '@/components/ChronicleReview'
+import { StructurePanel } from '@/components/StructurePanel'
 import { PlanReview } from '@/components/PlanReview'
 import { useToast } from '@/components/ToastContext'
 import {
@@ -40,6 +41,7 @@ import {
   PageHeader,
   Panel,
   SelectField,
+  Tabs,
   TextArea,
   TextField,
 } from '@/components/ui'
@@ -65,6 +67,17 @@ export function EpisodeQueue() {
   const [batching, setBatching] = useState(false)
   const [editing, setEditing] = useState<Episode | null>(null)
   const [deleting, setDeleting] = useState<Episode | null>(null)
+  // 여러 회차를 골라 한 번에 지운다. 하나씩 지우면 매번 번호가 당겨져서, 두
+  // 번째부터는 고른 것과 다른 회차가 지워진다.
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [deletingMany, setDeletingMany] = useState(false)
+  // 삭제·이동으로 번호가 바뀌면 고른 번호가 다른 회차를 가리키게 되므로 비운다.
+  const queueShape = (project?.episodes ?? [])
+    .map((episode) => `${episode.episode_number}:${episode.author_storyline.length}`)
+    .join(',')
+  useEffect(() => {
+    setSelected(new Set())
+  }, [queueShape])
   const [regenerating, setRegenerating] = useState<Episode | null>(null)
   const [expanded, setExpanded] = useState<number | null>(null)
   // The drag source lives in a ref as well as state: `drop` reads it in the
@@ -171,6 +184,18 @@ export function EpisodeQueue() {
     }
   }
 
+  const removeMany = async () => {
+    const numbers = [...selected].sort((a, b) => a - b)
+    try {
+      await api.deleteEpisodes(numbers)
+      setSelected(new Set())
+      await refresh()
+      success(`${numbers.length}개 회차를 삭제하고 큐를 다시 정렬했습니다`)
+    } catch (cause) {
+      fromError(cause, '회차를 삭제하지 못했습니다.')
+    }
+  }
+
   const requeue = async (episode: Episode) => {
     try {
       await api.updateEpisode(episode.episode_number, { status: 'queued' })
@@ -239,6 +264,11 @@ export function EpisodeQueue() {
         }
       />
 
+      <StructurePanel
+        onChanged={refresh}
+        watch={episodes.map((episode) => `${episode.episode_number}:${episode.status}`).join(',')}
+      />
+
       {pending.length > 0 && (
         <div className="mb-5 flex items-start gap-3 rounded-xl border border-accent/25 bg-accent/8 px-4 py-3">
           <RotateCcw className="mt-0.5 size-4 shrink-0 text-accent-bright" aria-hidden />
@@ -265,9 +295,56 @@ export function EpisodeQueue() {
         </Panel>
       ) : (
         <div className="space-y-2.5">
+          <div className="flex min-h-8 flex-wrap items-center gap-3 px-1 text-xs text-ink-dim">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                className="size-4 accent-accent"
+                checked={selected.size > 0 && selected.size === episodes.length}
+                ref={(element) => {
+                  if (element)
+                    element.indeterminate = selected.size > 0 && selected.size < episodes.length
+                }}
+                onChange={(event) =>
+                  setSelected(
+                    event.target.checked
+                      ? new Set(episodes.map((episode) => episode.episode_number))
+                      : new Set(),
+                  )
+                }
+              />
+              전체 선택
+            </label>
+            {selected.size > 0 && (
+              <>
+                <span className="text-ink">{selected.size}개 선택됨</span>
+                <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+                  선택 해제
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  icon={Trash2}
+                  disabled={busy}
+                  onClick={() => setDeletingMany(true)}
+                >
+                  선택한 {selected.size}개 삭제
+                </Button>
+              </>
+            )}
+          </div>
           {episodes.map((episode, index) => (
             <EpisodeCard
               key={episode.episode_number}
+              selected={selected.has(episode.episode_number)}
+              onSelect={(on) =>
+                setSelected((current) => {
+                  const next = new Set(current)
+                  if (on) next.add(episode.episode_number)
+                  else next.delete(episode.episode_number)
+                  return next
+                })
+              }
               episode={episode}
               first={index === 0}
               last={index === episodes.length - 1}
@@ -383,6 +460,29 @@ export function EpisodeQueue() {
       />
 
       <ConfirmDialog
+        open={deletingMany}
+        onClose={() => setDeletingMany(false)}
+        onConfirm={() => void removeMany()}
+        title={`선택한 ${selected.size}개 회차를 삭제하시겠습니까?`}
+        confirmLabel={`${selected.size}개 삭제`}
+        message={
+          <>
+            <p>
+              {[...selected]
+                .sort((a, b) => a - b)
+                .map((number) => `${number}화`)
+                .join(', ')}
+              를 삭제합니다. 남은 회차는 1화부터 빈틈없이 다시 번호가 매겨집니다.
+            </p>
+            <p className="mt-2 text-ink-muted">
+              본문과 기획서도 함께 지워지며 되돌릴 수 없습니다. 이 회차들이 위키에 남긴 기록도 함께
+              지워집니다.
+            </p>
+          </>
+        }
+      />
+
+      <ConfirmDialog
         open={deleting !== null}
         onClose={() => setDeleting(null)}
         onConfirm={() => deleting && void remove(deleting)}
@@ -466,7 +566,11 @@ function EpisodeCard({
   onDragOver,
   onDrop,
   onDragEnd,
+  selected,
+  onSelect,
 }: {
+  selected: boolean
+  onSelect: (on: boolean) => void
   episode: Episode
   first: boolean
   last: boolean
@@ -506,6 +610,7 @@ function EpisodeCard({
       }}
       className={cn(
         'sw-panel group transition-all duration-200',
+        selected && 'border-accent/40 bg-accent/5',
         isDragging && 'opacity-40',
         isDropTarget && 'border-accent/50 ring-1 ring-accent/30',
       )}
@@ -521,6 +626,14 @@ function EpisodeCard({
         >
           <GripVertical className="size-4" />
         </span>
+
+        <input
+          type="checkbox"
+          aria-label={`${episode.episode_number}화 선택`}
+          className="mt-1 size-4 shrink-0 cursor-pointer accent-accent"
+          checked={selected}
+          onChange={(event) => onSelect(event.target.checked)}
+        />
 
         <span className="mt-0.5 w-7 shrink-0 text-right font-mono text-sm text-ink-muted tabular-nums">
           #{episode.episode_number}
@@ -641,6 +754,12 @@ function EpisodeCard({
 // Add / edit
 // ==========================================================================
 
+/** 회차 추가의 두 가지 방법. 기본은 AI가 다음 20화를 한 번에 짜는 쪽이다. */
+type AddMode = 'batch' | 'single'
+
+/** 한 번에 짜는 회차 수. 이보다 길면 뒤쪽 개요가 묽어진다. */
+const BATCH_SIZE = 20
+
 function AddEpisodeModal({
   open,
   nextNumber,
@@ -653,6 +772,18 @@ function AddEpisodeModal({
   onAdded: () => Promise<void>
 }) {
   const { success, fromError } = useToast()
+  const [mode, setMode] = useState<AddMode>('batch')
+
+  // --- 한 번에 여러 화 -------------------------------------------------------
+  const [count, setCount] = useState(BATCH_SIZE)
+  const [direction, setDirection] = useState('')
+  const [drafts, setDrafts] = useState<{ episode_number: number; author_storyline: string }[]>(
+    [],
+  )
+  const [kept, setKept] = useState<Set<number>>(new Set())
+  const [drafting, setDrafting] = useState(false)
+
+  // --- 한 화 직접 -------------------------------------------------------------
   const [title, setTitle] = useState('')
   const [storyline, setStoryline] = useState('')
   const [pacing, setPacing] = useState<Pacing>('normal')
@@ -662,9 +793,49 @@ function AddEpisodeModal({
     setTitle('')
     setStoryline('')
     setPacing('normal')
+    setDirection('')
+    setDrafts([])
+    setKept(new Set())
   }
 
-  const add = async () => {
+  // 위키, 지금까지의 회차, 남은 떡밥, 인물 관계, 작품 구조를 읽고 다음 N화를 한
+  // 흐름으로 짠다. 저장은 하지 않는다 — 작가가 읽고 고른 것만 큐에 들어간다.
+  const draftBatch = async () => {
+    setDrafting(true)
+    try {
+      const result = await api.draftEpisodeBatch(count, direction.trim())
+      setDrafts(result.episodes)
+      setKept(new Set(result.episodes.map((e) => e.episode_number)))
+      const missing = count - result.episodes.length
+      success(
+        missing > 0
+          ? `${result.episodes.length}화를 짰습니다 (${missing}화는 비어서 왔습니다). 읽어 보시고 큐에 넣으세요.`
+          : `${result.episodes.length}화를 짰습니다. 읽어 보시고 고칠 곳은 고친 뒤 큐에 넣으세요.`,
+      )
+    } catch (cause) {
+      fromError(cause, '개요를 짜지 못했습니다.')
+    } finally {
+      setDrafting(false)
+    }
+  }
+
+  const addBatch = async () => {
+    const chosen = drafts.filter((d) => kept.has(d.episode_number) && d.author_storyline.trim())
+    setSaving(true)
+    try {
+      await api.addEpisodes(chosen.map((d) => ({ author_storyline: d.author_storyline.trim() })))
+      await onAdded()
+      success(`${chosen.length}개 회차가 큐에 등록되었습니다`)
+      reset()
+      onClose()
+    } catch (cause) {
+      fromError(cause, '회차를 등록하지 못했습니다.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const addSingle = async () => {
     setSaving(true)
     try {
       await api.addEpisode(storyline.trim(), title.trim(), pacing)
@@ -679,48 +850,172 @@ function AddEpisodeModal({
     }
   }
 
+  const lastNumber = nextNumber + count - 1
+  const keptCount = drafts.filter((d) => kept.has(d.episode_number)).length
+  const skipsSome = drafts.length > 0 && keptCount < drafts.length
+
   return (
     <Modal
       open={open}
       onClose={onClose}
       wide
-      title={`제${nextNumber}화 추가`}
-      description="간단한 메모 수준의 개요도 괜찮습니다. AI가 사건 사이를 흥미진진하게 채워 넣습니다."
+      title={mode === 'batch' ? `${nextNumber}~${lastNumber}화 추가` : `제${nextNumber}화 추가`}
+      description={
+        mode === 'batch'
+          ? 'AI가 다음 회차들을 한 흐름으로 짭니다. 작품 구조(분량·부 구성·떡밥·관계 전환점), 위키, 지금까지의 회차, 남은 떡밥을 읽고 이 범위에 맞는 속도로 씁니다.'
+          : '개요를 직접 적습니다.'
+      }
       footer={
         <>
           <Button onClick={onClose}>취소</Button>
-          <Button
-            variant="primary"
-            onClick={() => void add()}
-            loading={saving}
-            disabled={!storyline.trim()}
-          >
-            큐에 추가
-          </Button>
+          {mode === 'batch' ? (
+            <Button
+              variant="primary"
+              onClick={() => void addBatch()}
+              loading={saving}
+              disabled={keptCount === 0 || drafting}
+            >
+              {keptCount > 0 ? `${keptCount}개 큐에 추가` : '큐에 추가'}
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              onClick={() => void addSingle()}
+              loading={saving}
+              disabled={!storyline.trim()}
+            >
+              큐에 추가
+            </Button>
+          )}
         </>
       }
     >
-      <div className="space-y-4">
-        <TextField
-          label="회차 제목 (선택사항)"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="비워두면 본문 작성 후 AI가 어울리는 제목을 자동으로 짓습니다."
-        />
-        <TextArea
-          label="회차 개요"
-          rows={9}
-          value={storyline}
-          onChange={(event) => setStoryline(event.target.value)}
-          placeholder="이번 회차에서 일어날 주요 사건과 전개를 대략적으로 적어주세요…"
-        />
-        <SelectField
-          label="전개 속도 (Pacing)"
-          value={pacing}
-          onChange={(event) => setPacing(event.target.value as Pacing)}
-          options={PACING_OPTIONS}
-        />
-      </div>
+      <Tabs
+        tabs={[
+          { id: 'batch', label: `AI가 ${BATCH_SIZE}화 한꺼번에`, icon: Sparkles },
+          { id: 'single', label: '한 화 직접 적기', icon: Pencil },
+        ]}
+        active={mode}
+        onChange={setMode}
+      />
+
+      {mode === 'batch' ? (
+        <div className="space-y-4">
+          <div className="rounded-lg border border-line p-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <TextField
+                className="w-28"
+                label="회차 수"
+                type="number"
+                min={1}
+                max={BATCH_SIZE}
+                value={count}
+                disabled={drafting}
+                onChange={(event) =>
+                  setCount(Math.max(1, Math.min(BATCH_SIZE, Number(event.target.value) || 1)))
+                }
+              />
+              <p className="pb-2 text-xs text-ink-muted">
+                {nextNumber}화부터 {lastNumber}화까지 짭니다. 모델을 한 번 호출합니다.
+              </p>
+            </div>
+            <TextArea
+              className="mt-3"
+              label="이 범위에서 원하는 전개 (선택)"
+              rows={2}
+              value={direction}
+              onChange={(event) => setDirection(event.target.value)}
+              placeholder="예: 이 구간은 가족 이야기로 느긋하게, 라이벌과의 관계를 조금씩 / 비워 두면 작품 구조대로 AI가 정합니다"
+            />
+            <div className="mt-3 flex justify-end">
+              <Button
+                icon={Sparkles}
+                loading={drafting}
+                disabled={drafting || saving}
+                onClick={() => void draftBatch()}
+              >
+                {drafts.length > 0 ? '다시 짜기' : `${count}화 개요 짜기`}
+              </Button>
+            </div>
+          </div>
+
+          {drafts.length > 0 && (
+            <div>
+              <p className="mb-2 text-sm font-medium text-ink">
+                개요 {drafts.length}개 — {keptCount}개 선택
+              </p>
+              {skipsSome && (
+                <p className="mb-2 text-xs text-warn-bright">
+                  빼신 회차가 있으면 그 뒤 회차들의 번호가 앞으로 당겨집니다.
+                </p>
+              )}
+              <ul className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
+                {drafts.map((draft, index) => {
+                  const on = kept.has(draft.episode_number)
+                  return (
+                    <li
+                      key={draft.episode_number}
+                      className={cn('rounded-lg border border-line p-3', !on && 'opacity-50')}
+                    >
+                      <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-ink">
+                        <input
+                          type="checkbox"
+                          className="size-4 accent-accent"
+                          checked={on}
+                          onChange={() =>
+                            setKept((current) => {
+                              const next = new Set(current)
+                              if (next.has(draft.episode_number)) next.delete(draft.episode_number)
+                              else next.add(draft.episode_number)
+                              return next
+                            })
+                          }
+                        />
+                        {draft.episode_number}화
+                      </label>
+                      <textarea
+                        className="sw-field mt-2 w-full text-sm"
+                        rows={3}
+                        value={draft.author_storyline}
+                        disabled={!on}
+                        onChange={(event) =>
+                          setDrafts((current) =>
+                            current.map((d, i) =>
+                              i === index ? { ...d, author_storyline: event.target.value } : d,
+                            ),
+                          )
+                        }
+                      />
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <TextField
+            label="회차 제목 (선택사항)"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="비워두면 본문 작성 후 AI가 어울리는 제목을 자동으로 짓습니다."
+          />
+          <TextArea
+            label="회차 개요"
+            rows={9}
+            value={storyline}
+            onChange={(event) => setStoryline(event.target.value)}
+            placeholder="이번 회차에서 일어날 주요 사건과 전개를 대략적으로 적어주세요…"
+          />
+          <SelectField
+            label="전개 속도 (Pacing)"
+            value={pacing}
+            onChange={(event) => setPacing(event.target.value as Pacing)}
+            options={PACING_OPTIONS}
+          />
+        </div>
+      )}
     </Modal>
   )
 }

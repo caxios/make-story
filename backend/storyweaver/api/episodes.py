@@ -11,12 +11,17 @@ from pydantic import BaseModel, Field, StringConstraints
 from storyweaver import telemetry
 from storyweaver.agents import context as ctx
 from storyweaver.agents import director
+from storyweaver.agents import next_episode
+from storyweaver.agents.flow import episode_flow
+from storyweaver.agents.concept import reply_text
 from storyweaver.llm import get_llm
 from storyweaver.models import Episode, Scene, StoryBeat
 from storyweaver.models.style import PACING, PROSE_DENSITIES
 from storyweaver.api import deps
 from storyweaver.ui.project import Project
-from storyweaver.wiki import story_brief
+from storyweaver.models.structure import describe_position, describe_range
+from storyweaver.wiki import STORY_SUBJECT_ID, story_brief
+from storyweaver.wiki.brief import planning_brief
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +143,10 @@ def _expand_summary(
     becomes the episode's `author_storyline`, which is what every later stage
     reads.
     """
+    # The work's direction, from the story page. Passed in all along but never
+    # put in the prompt, so the "aim this episode at it" instruction below was
+    # pointing at nothing.
+    direction_text = f"\n\n--- WHERE THE WORK IS HEADED ---\n{brief}" if brief.strip() else ""
     prior_text = ""
     if story_so_far:
         prior_text += f"\n\n--- EPISODES ALREADY IN THE QUEUE ---\n{story_so_far}"
@@ -165,10 +174,10 @@ given below, aim this episode at it — do not have anyone act on knowledge of
 the ending, and do not bring it forward.
 
 --- CAST ---
-{ctx.format_character_summaries(project.characters)}
+{ctx.format_cast_for_planning(project.characters)}
 
 --- WORLD ---
-{ctx.format_world_summary(project.world)}{prior_text}
+{ctx.format_world_for_planning(project.world)}{direction_text}{prior_text}
 
 --- THE AUTHOR'S ONE LINE FOR EPISODE {episode_number} ---
 {summary}
@@ -184,7 +193,9 @@ Return only the outline text. No headers, no JSON, no markdown fences.
             status_code=502, detail=f"The planner failed on episode {episode_number}: {error}"
         ) from error
 
-    text = str(getattr(result, "content", result)).strip()
+    # Gemini answers in content blocks; `str()` on those put the raw block list,
+    # signature and all, into the author's outline.
+    text = reply_text(result)
     if not text:
         raise HTTPException(
             status_code=502,
@@ -221,6 +232,104 @@ def add_episodes_batch(request: BatchRequest) -> list[Episode]:
             raise HTTPException(status_code=422, detail="No outlines found in the text")
         deps.save_project(project)
     return added
+
+
+class ManyOutline(BaseModel):
+    author_storyline: str = Field(min_length=1)
+    title: str = ""
+
+
+class AddManyRequest(BaseModel):
+    episodes: list[ManyOutline] = Field(min_length=1, max_length=next_episode.MAX_BATCH * 5)
+
+
+@router.post("/many", response_model=list[Episode], status_code=201)
+def add_many_episodes(body: AddManyRequest) -> list[Episode]:
+    """Queue several outlines at once, in order, at the end of the queue.
+
+    What a drafted batch is saved with once the author has read it. The episodes
+    are numbered where they land, which is where the batch was drafted for.
+    """
+    with deps.write_lock():
+        project = deps.get_project()
+        added = [
+            project.add_episode(outline.author_storyline.strip(), outline.title.strip())
+            for outline in body.episodes
+        ]
+        deps.save_project(project)
+
+    memory = deps.get_memory()
+    if memory is not None:
+        # The work's own page keeps the queue's history, as it does for the
+        # outline the concept stage drew.
+        for episode in added:
+            memory.chronicle.record(
+                "story", STORY_SUBJECT_ID, "episodes",
+                f"{episode.episode_number}화 — {episode.author_storyline}",
+                source="author", section_kind="log",
+            )
+    return added
+
+
+class DraftBatchRequest(BaseModel):
+    count: int = Field(default=next_episode.MAX_BATCH, ge=1, le=next_episode.MAX_BATCH)
+    direction: str = Field(default="", max_length=2000)
+
+
+class DraftedOutline(BaseModel):
+    episode_number: int
+    author_storyline: str
+
+
+class DraftBatchResponse(BaseModel):
+    episodes: list[DraftedOutline]
+
+
+@router.post("/draft-batch", response_model=DraftBatchResponse)
+def draft_episode_batch(
+    body: DraftBatchRequest,
+    project: Project = Depends(deps.get_project),
+) -> DraftBatchResponse:
+    """Plan the next `count` episodes (twenty by default) in one go.
+
+    One model call, so the stretch is planned as a run rather than twenty
+    separate guesses. It is shown where the stretch sits in the planned length —
+    the parts it crosses, the threads and relationship turns that fall inside
+    it — along with everything the single-episode draft is shown. Nothing is
+    saved; the author reads, edits and keeps what they want (`POST /many`).
+    """
+    if not project.characters:
+        raise HTTPException(status_code=409, detail="등장인물이 아직 없습니다")
+    if not project.world.overview.strip():
+        raise HTTPException(status_code=409, detail="세계관이 아직 없습니다")
+
+    memory = deps.get_memory()
+    start = project.next_episode_number()
+    end = start + body.count - 1
+    folded = deps.folded_project(project)
+
+    try:
+        drafted = next_episode.draft_batch(
+            folded,
+            body.count,
+            brief=story_brief(memory.chronicle) if memory is not None else "",
+            threads=memory.get_active_plot_threads() if memory is not None else [],
+            closing=_closing_of_last(project, memory),
+            direction=body.direction,
+            range_text=describe_range(project.structure, start, end),
+        )
+    except Exception as error:  # noqa: BLE001 — reported to the author
+        logger.exception("Drafting episodes %d-%d failed", start, end)
+        raise HTTPException(
+            status_code=502, detail=f"{start}~{end}화 개요를 쓰지 못했습니다: {error}"
+        ) from error
+
+    return DraftBatchResponse(
+        episodes=[
+            DraftedOutline(episode_number=number, author_storyline=outline)
+            for number, outline in drafted
+        ]
+    )
 
 
 @router.post("/plan-all", response_model=PlanAllResponse)
@@ -262,7 +371,9 @@ def plan_all_episodes(
             project=project,
             story_so_far=story_so_far,
             prior_summaries=prior_summaries,
-            brief=brief,
+            brief=planning_brief(
+                memory.chronicle if memory is not None else None, project.structure, episode_number
+            ),
         )
         results.append(
             ExpandedEpisodeSummary(
@@ -277,6 +388,76 @@ def plan_all_episodes(
         prior_summaries.append(f"Episode {episode_number}: {one_line}")
 
     return PlanAllResponse(episodes=results)
+
+
+class DraftNextRequest(BaseModel):
+    direction: str = Field(
+        default="",
+        max_length=2000,
+        description="What the author wants from this episode, if anything. Optional.",
+    )
+
+
+class DraftNextResponse(BaseModel):
+    episode_number: int
+    author_storyline: str
+
+
+@router.post("/draft-next", response_model=DraftNextResponse)
+def draft_next_episode(
+    body: DraftNextRequest,
+    project: Project = Depends(deps.get_project),
+) -> DraftNextResponse:
+    """Write the outline for the episode after the last one in the queue.
+
+    One model call, and nothing is saved: the author reads it, changes what
+    they want, and adds it the ordinary way. It is drawn from the wiki as the
+    story has left it, every episode in the queue, the open threads, the work's
+    direction and whatever the author asked for — see `agents/next_episode.py`.
+    """
+    if not project.characters:
+        raise HTTPException(status_code=409, detail="등장인물이 아직 없습니다")
+    if not project.world.overview.strip():
+        raise HTTPException(status_code=409, detail="세계관이 아직 없습니다")
+
+    memory = deps.get_memory()
+    brief = story_brief(memory.chronicle) if memory is not None else ""
+    threads = memory.get_active_plot_threads() if memory is not None else []
+    closing = _closing_of_last(project, memory)
+    folded = deps.folded_project(project)
+
+    try:
+        outline = next_episode.draft(
+            folded, brief=brief, threads=threads, closing=closing, direction=body.direction,
+            position=describe_position(project.structure, project.next_episode_number()),
+        )
+    except Exception as error:  # noqa: BLE001 — reported to the author
+        logger.exception("Drafting the next episode failed")
+        raise HTTPException(
+            status_code=502, detail=f"다음 회차 개요를 쓰지 못했습니다: {error}"
+        ) from error
+
+    return DraftNextResponse(
+        episode_number=project.next_episode_number(), author_storyline=outline
+    )
+
+
+def _closing_of_last(project: Project, memory) -> str:
+    """The last written passage — but only if it is the end of the queue.
+
+    When chapters are planned past the last written one, that passage is not
+    where the next episode starts from, and showing it would pull the draft
+    back to the wrong moment.
+    """
+    if memory is None or not project.episodes:
+        return ""
+    closing = memory.structured_store.get_episode_closing()
+    if closing is None:
+        return ""
+    number, passage = closing
+    if number != project.episodes[-1].episode_number:
+        return ""
+    return f"## Where episode {number} ended — its last lines\n\n{passage}"
 
 
 @router.get("/{episode_number}", response_model=Episode)
@@ -350,6 +531,58 @@ def delete_episode(episode_number: int) -> list[Episode]:
         mapping.update({n: n - 1 for n in range(episode_number + 1, total + 1)})
         _follow_renumbering(mapping)
     deps.get_checkpoints().clear(episode_number)
+    return project.episodes
+
+
+class DeleteManyRequest(BaseModel):
+    episode_numbers: list[int] = Field(min_length=1)
+
+
+@router.post("/delete-many", response_model=list[Episode])
+def delete_episodes(body: DeleteManyRequest) -> list[Episode]:
+    """Delete several episodes at once, and renumber the queue once.
+
+    Deleting them one call at a time would renumber after each, so the numbers
+    the author ticked would point at different chapters by the second call.
+    Here every survivor's old number maps straight to its new one, and the
+    chronicle follows that single mapping.
+
+    Refused if any of them is being written right now.
+    """
+    from storyweaver.api.generation import running_generations
+
+    doomed = set(body.episode_numbers)
+    busy = doomed & set(running_generations())
+    if busy:
+        raise HTTPException(
+            status_code=409,
+            detail=f"지금 집필 중인 회차는 지울 수 없습니다: {', '.join(map(str, sorted(busy)))}화",
+        )
+
+    with deps.write_lock():
+        project = deps.get_project()
+        existing = {e.episode_number for e in project.episodes}
+        missing = sorted(doomed - existing)
+        if missing:
+            raise HTTPException(
+                status_code=404,
+                detail=f"없는 회차입니다: {', '.join(map(str, missing))}화",
+            )
+
+        survivors = [e.episode_number for e in project.episodes if e.episode_number not in doomed]
+        mapping: dict[int, int | None] = {n: None for n in doomed}
+        mapping.update(
+            {old: new for new, old in enumerate(survivors, start=1) if old != new}
+        )
+        project.episodes = [e for e in project.episodes if e.episode_number not in doomed]
+        project.renumber_episodes()
+        deps.save_project(project)
+        _follow_renumbering(mapping)
+
+    checkpoints = deps.get_checkpoints()
+    for number in doomed:
+        checkpoints.clear(number)
+    logger.info("Deleted episodes %s", sorted(doomed))
     return project.episodes
 
 
@@ -482,13 +715,16 @@ def draft_plan(episode_number: int) -> dict:
     folded = deps.folded_project(project)
 
     memory_context = ""
-    brief = ""
     if memory is not None:
         memory_context = memory.build_director_context(folded.character_map(), episode)
-        # Where the whole work is going. Rule 2 has the Director build a sparse
-        # storyline into a full episode, and doing that blind to the arc drifts
-        # off it one chapter at a time.
-        brief = story_brief(memory.chronicle)
+    # Where the whole work is going, and where this episode sits in it. Rule 2
+    # has the Director build a sparse storyline into a full episode, and doing
+    # that blind to the arc drifts off it one chapter at a time.
+    brief = planning_brief(
+        memory.chronicle if memory is not None else None,
+        project.structure,
+        episode.episode_number,
+    )
 
     try:
         scenes = director.decompose_episode(
@@ -497,6 +733,9 @@ def draft_plan(episode_number: int) -> dict:
             folded.character_map(),
             memory_context=memory_context,
             story_brief=brief,
+            # The episodes before and after, so this one does not stage what
+            # the next is planned for.
+            story_flow=episode_flow(project.episodes, episode.episode_number),
         )
     except Exception as error:  # noqa: BLE001 — reported to the author
         raise HTTPException(

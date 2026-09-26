@@ -12,6 +12,7 @@ from collections.abc import Mapping, Sequence
 from pydantic import BaseModel, Field
 
 from storyweaver.agents import context
+from storyweaver.agents.flow import flow_block
 from storyweaver.agents.prompts import render_prompt
 from storyweaver import telemetry
 from storyweaver.llm import get_llm
@@ -73,6 +74,7 @@ def build_system_prompt(
     constraints: Sequence[str] = (),
     memory_context: str = "",
     extra_sections: str = "",
+    story_flow: str = "",
 ) -> str:
     """Render this character's system prompt for the current point in the scene.
 
@@ -87,6 +89,7 @@ def build_system_prompt(
     return render_prompt(
         "character",
         memory_context=memory_context or NO_MEMORY,
+        story_flow=flow_block(story_flow),
         name=character.name,
         identity_line=_identity_line(character),
         # Sections the author added to this character's wiki page. They have no
@@ -148,6 +151,7 @@ def act(
     constraints: Sequence[str] = (),
     memory_context: str = "",
     extra_sections: str = "",
+    story_flow: str = "",
 ) -> InteractionEntry:
     """Produce this character's contribution for one turn of the scene."""
     prompt = build_system_prompt(
@@ -160,6 +164,7 @@ def act(
         constraints,
         memory_context,
         extra_sections,
+        story_flow,
     )
     model = telemetry.meter(llm or get_llm(stage="character"), "character")
     result: CharacterTurn = model.with_structured_output(CharacterTurn).invoke(prompt)

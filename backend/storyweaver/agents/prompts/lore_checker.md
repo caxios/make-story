@@ -14,6 +14,9 @@ Title: {scene_title}
 Location: {location}
 Objective: {objective}
 
+## The Episodes Around This One
+{story_flow}
+
 ## Interaction Log to Validate
 {interaction_log}
 
@@ -27,7 +30,11 @@ definitions. Flag any violations:
 3. Relationship contradictions (e.g. enemies acting friendly without narrative
    reason) — category `relationship_contradiction`
 4. Logical or continuity errors (e.g. referring to something that has not
-   happened, or being in two places at once) — category `continuity`
+   happened, or being in two places at once) — category `continuity`. This
+   includes the episodes around this one: a turn that contradicts what an
+   earlier episode established, or that plays out an event a later episode is
+   planned for, or a character speaking as if they knew what is planned. Flag
+   only clear cases — a hint or a setup is not a violation.
 
 For each violation, provide:
 - `turn`: the turn number of the offending log entry, exactly as shown above

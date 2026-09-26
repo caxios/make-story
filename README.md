@@ -56,6 +56,20 @@ On a fresh project the order is:
    기획하기** and work it out a message at a time. Either way it lands in the
    wiki as the first entry in each chain, so all of it stays editable. Skip
    this if you already know what you are writing.
+
+   Set **목표 총 회차** (e.g. 400) before the outline is drawn. The whole length
+   is laid out first — parts, and when each 떡밥 is planted and paid off — and
+   the opening chapters are paced as the opening of that length, not as the
+   whole book. After committing, **에피소드 큐 → 작품 구조** shows the layout
+   and where the next episode sits in it; **분량 바꾸기·다시 짜기** changes the
+   length and re-outlines the episodes not yet written (you pick which), and
+   every stage that outlines an episode is told its place in the whole.
+
+   The plan stays editable after committing: refine it or **직접 수정** (edit
+   any field by hand), then **작품에 반영** carries over only what changed in
+   the plan since it was last applied — edits made in the wiki or workshop in
+   the meantime are not overwritten. Removals are not carried over; delete
+   characters, rules and places on their own screens.
 1. **🌍 세계관 빌더** opens on **빠른 설정**, because the world is empty. Describe
    the setting in a paragraph and it fills in the title, genre, tone, rules and
    places.
@@ -63,6 +77,18 @@ On a fresh project the order is:
    fill the sheet in by hand.
 3. **📋 스토리 플래너** — one line per episode, expanded into outlines you approve.
 4. **📝 에피소드 큐 → 기획서 만들기** — check the scene layout, approve it, generate.
+   To continue past the planned chapters, **회차 추가** plans the next twenty
+   episodes as one run (1–20, then 21–40, …): paced by the work's structure —
+   the parts, the threads and the relationship turning points that fall in
+   that stretch — and drawn from the wiki, every episode so far and the open
+   threads, optionally steered by a line of your own. You tick and edit the
+   ones you keep before they are queued.
+
+   Every agent that writes a chapter — Director, characters, continuity
+   checker, Writer — sees the two episodes before it and the three planned
+   after it, marked as plans, so a chapter neither contradicts the last one nor
+   stages what the next is for. The planned ending still reaches the Director
+   only.
 5. When the chapter is done you are shown **what it recorded** about the cast and
    the world. Only what you accept reaches the next chapter.
 6. **📖 위키** — every setting, and the history of how it got that way. Anything
@@ -152,7 +178,7 @@ Generation reports real progress, driven by the pipeline itself:
 ## Command line
 
 ```bash
-pytest                                        # 835 tests, no API key and no network (enforced, not assumed)
+pytest                                        # 928 tests, no API key and no network (enforced, not assumed)
 python -m storyweaver.smoke_test              # is the model binding working?
 python -m storyweaver.demo_scene --two        # one scene, printed
 python -m storyweaver.demo_episode --memory   # one episode, with continuity

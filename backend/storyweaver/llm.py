@@ -38,6 +38,15 @@ STAGE_TEMPERATURES = {
 }
 
 
+# Stages whose output is not capped by us: they get the model's own ceiling
+# instead of config.MAX_OUTPUT_TOKENS. The concept stage rewrites the whole plan
+# on every call — world, arc, every character, the outline — and under the
+# shared cap (which Gemini's thinking tokens also count against) a large cast
+# was silently cut short: characters simply went missing from the reply.
+UNCAPPED_STAGES = {"concept"}
+MODEL_MAX_OUTPUT_TOKENS = 65536
+
+
 @lru_cache(maxsize=16)
 def build_model(
     temperature: float | None = None,
@@ -72,6 +81,8 @@ def get_llm(
     """
     if temperature is None:
         temperature = STAGE_TEMPERATURES.get(stage, config.TEMPERATURE)
+    if max_output_tokens is None and stage in UNCAPPED_STAGES:
+        max_output_tokens = MODEL_MAX_OUTPUT_TOKENS
 
     def factory(value: float):
         return build_model(value, max_output_tokens)

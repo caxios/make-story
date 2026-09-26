@@ -30,9 +30,11 @@ from starlette.concurrency import iterate_in_threadpool
 
 from storyweaver import telemetry
 from storyweaver.agents import episode_runner
+from storyweaver.agents.flow import episode_flow
 from storyweaver.api import deps, telemetry as telemetry_log
 from storyweaver.ui.progress import NODE_STAGES, GenerationProgress
 from storyweaver.ui.project import Project
+from storyweaver.wiki.brief import planning_brief
 
 logger = logging.getLogger(__name__)
 
@@ -273,6 +275,15 @@ def _start_job(project: Project, episode_number: int, max_turns: int) -> _Job:
                         # only an unplanned episode gets the Director.
                         plan=approved_plan,
                         review_chronicle=folded.review_chronicle,
+                        # Every agent that writes the chapter sees the episodes
+                        # around it; the Director alone also sees where the
+                        # whole work is headed.
+                        story_flow=episode_flow(project.episodes, episode_number),
+                        story_brief=planning_brief(
+                            memory.chronicle if memory is not None else None,
+                            project.structure,
+                            episode_number,
+                        ),
                     )
                 except Exception as error:  # noqa: BLE001 — reported to the client
                     logger.exception("Episode %d failed", episode_number)

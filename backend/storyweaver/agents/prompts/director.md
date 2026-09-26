@@ -95,5 +95,13 @@ This is direction, not material. Do not have anyone act on knowledge of the
 ending, do not foreshadow it deliberately, and do not bring events forward
 because you can see them coming. The characters have not read this.
 
+## The Episodes Around This One
+{story_flow}
+
+Build this episode so it follows on from the one before and hands over to the
+one after. Anything the next episodes are planned to do stays out of this one:
+do not stage it early, and do not resolve a tension the next episode is built
+on. Setting it up — a glance, a detail, an unanswered question — is welcome.
+
 ## The Author's Storyline For This Episode
 {author_storyline}

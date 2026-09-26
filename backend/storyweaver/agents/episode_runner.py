@@ -55,6 +55,10 @@ class EpisodePipelineState(TypedDict, total=False):
     characters: dict[str, CharacterProfile]
     episode: Episode
     writing_style: WritingStyle
+    # The episodes on either side of this one (agents/flow.py), for every agent
+    # that writes it; and the work's direction, for the Director only.
+    story_flow: str
+    story_brief: str
     # --- Working ---
     current_scene_index: int
     scenes: list[Scene]
@@ -103,6 +107,8 @@ def director_plan_scenes(
         state["characters"],
         llm=models.director,
         memory_context=memory_context,
+        story_brief=state.get("story_brief", ""),
+        story_flow=state.get("story_flow", ""),
     )
     if not scenes:
         raise RuntimeError("The Director produced no usable scenes for this episode")
@@ -130,6 +136,7 @@ def simulate_current_scene(
         supervisor_llm=models.supervisor,
         max_turns=max_turns,
         memory=memory,
+        story_flow=state.get("story_flow", ""),
     )
     return {
         "current_entries": final["interaction_log"],
@@ -143,7 +150,8 @@ def lore_check_current_scene(state: EpisodePipelineState, models: PipelineModels
     entries = [InteractionEntry.model_validate(e) for e in state["current_entries"]]
 
     result = lore_checker.check(
-        entries, state["world_lore"], state["characters"], scene=scene, llm=models.lore
+        entries, state["world_lore"], state["characters"], scene=scene, llm=models.lore,
+        story_flow=state.get("story_flow", ""),
     )
     if not result.passed:
         logger.info(
@@ -199,6 +207,7 @@ def rerun_with_fixes(
         initial_log=keep,
         constraints=state["constraints"],
         memory=memory,
+        story_flow=state.get("story_flow", ""),
     )
     return {
         "current_entries": final["interaction_log"],
@@ -231,6 +240,7 @@ def write_current_scene(
         pacing=state["episode"].pacing,
         creativity=state["episode"].creativity,
         tone_notes=state["episode"].tone_notes,
+        story_flow=state.get("story_flow", ""),
     )
 
     scenes = list(state["scenes"])
@@ -266,6 +276,7 @@ def write_scene_transition(
             next_prose=prose[-1],
             style=state["writing_style"],
             llm=models.transition or models.writer,
+            story_flow=state.get("story_flow", ""),
         )
     except Exception:  # noqa: BLE001 — a missing bridge is a scene break, not a failure
         logger.exception("Could not write a transition into scene %d", index + 1)
@@ -488,6 +499,8 @@ def stream_episode(
     transitions: bool = True,
     resume_from: EpisodeCheckpoint | None = None,
     plan: Sequence[Scene] | None = None,
+    story_flow: str = "",
+    story_brief: str = "",
 ) -> Iterator[tuple[str, dict[str, Any]]]:
     """Run the pipeline, yielding `(node_name, accumulated_state)` after each node.
 
@@ -501,7 +514,9 @@ def stream_episode(
     app = build_episode_graph(
         models, max_turns_per_scene, auto_title, memory, checkpoints, transitions
     )
-    initial = _initial_state(episode, world, char_map, style, resume_from, plan)
+    initial = _initial_state(
+        episode, world, char_map, style, resume_from, plan, story_flow, story_brief
+    )
 
     latest_node: str | None = None
     # Worst case per scene: simulate + (check + rerun) * (MAX_LORE_RETRIES + 1)
@@ -542,6 +557,8 @@ def _initial_state(
     style: WritingStyle | None,
     resume_from: EpisodeCheckpoint | None = None,
     plan: Sequence[Scene] | None = None,
+    story_flow: str = "",
+    story_brief: str = "",
 ) -> EpisodePipelineState:
     resumed: dict[str, Any] = {}
     if plan and resume_from is None:
@@ -571,6 +588,8 @@ def _initial_state(
         "characters": char_map,
         "episode": episode,
         "writing_style": _style_for(style, episode),
+        "story_flow": story_flow,
+        "story_brief": story_brief,
         "current_scene_index": 0,
         "scenes": [],
         "scene_prose_outputs": [],
@@ -602,6 +621,8 @@ def run_episode(
     clear_checkpoint: bool = True,
     plan: Sequence[Scene] | None = None,
     review_chronicle: bool = True,
+    story_flow: str = "",
+    story_brief: str = "",
 ) -> tuple[Episode, dict[str, Any]]:
     """Run an episode end to end.
 
@@ -636,7 +657,7 @@ def run_episode(
             checkpoints.clear(episode.episode_number)
 
     final: dict[str, Any] = _initial_state(
-        episode, world, char_map, style, resume_from, plan
+        episode, world, char_map, style, resume_from, plan, story_flow, story_brief
     )
     for node, state in stream_episode(
         episode,
@@ -652,6 +673,8 @@ def run_episode(
         transitions=transitions,
         resume_from=resume_from,
         plan=plan,
+        story_flow=story_flow,
+        story_brief=story_brief,
     ):
         final = state
         if on_event is not None:

@@ -92,13 +92,20 @@ def commit_concept(
     concept: StoryConcept,
     turns: list | None = None,
     messages: list | None = None,
+    structure=None,
 ) -> CommitReport:
     """Write an agreed concept into `project` and the chronicle.
 
     `project` is mutated and must be saved by the caller, inside the same lock
     this was called under.
+
+    `structure` — the planned length and its layout — goes onto the project as
+    it is: every later stage that outlines an episode reads its place in the
+    whole from there.
     """
     report = CommitReport()
+    if structure is not None:
+        project.structure = structure
 
     # --- the world ---------------------------------------------------------
     project.world = project.world.model_copy(

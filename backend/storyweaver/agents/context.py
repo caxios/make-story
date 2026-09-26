@@ -147,6 +147,78 @@ def format_world_summary(world: WorldLore) -> str:
     return "\n\n".join(part for part in parts if str(part).strip())
 
 
+# Who comes first when the cast is listed for a planning stage: the people the
+# story is about, then the people it is against, then everyone else. With a
+# cast of thirty, the order is itself information.
+_ROLE_ORDER = [
+    "주인공", "서브 주인공", "적대자 / 악역", "연인 / 히로인",
+    "라이벌 / 대조 인물", "스승 / 조력자", "조연", "단역 / 엑스트라",
+]
+PLANNING_BACKSTORY_CHARS = 300
+
+
+def _role_rank(character: CharacterProfile) -> int:
+    role = describe_role(character.role or "")
+    return _ROLE_ORDER.index(role) if role in _ROLE_ORDER else len(_ROLE_ORDER) - 2
+
+
+def format_cast_for_planning(characters: Iterable[CharacterProfile]) -> str:
+    """The whole cast, as a stage that plans the story needs it.
+
+    `format_character_summaries` gives a name, a personality line and goals —
+    enough to cast a scene, not enough to plot one. Planning needs to know who
+    matters most, what each of them is hiding (the raw material of every 떡밥),
+    where they came from, and how they stand with each other, named rather than
+    as ids, because relationships are what a serial runs on.
+    """
+    cast = sorted(characters, key=lambda c: (_role_rank(c), c.name))
+    names = {c.id: c.name for c in cast}
+    blocks = []
+    for c in cast:
+        head = f"### {c.name} ({c.id})"
+        facts = [describe_role(c.role) if c.role else ""]
+        if c.age is not None:
+            facts.append(f"{c.age}세")
+        if c.gender:
+            facts.append(c.gender)
+        head += " — " + ", ".join(f for f in facts if f) if any(facts) else ""
+        lines = [head]
+        if c.personality_summary.strip():
+            lines.append(f"성격: {c.personality_summary.strip()}")
+        if c.goals:
+            lines.append("목표: " + "; ".join(c.goals))
+        if c.secrets:
+            lines.append("비밀(작가만 앎): " + "; ".join(c.secrets))
+        if c.backstory.strip():
+            backstory = c.backstory.strip()
+            if len(backstory) > PLANNING_BACKSTORY_CHARS:
+                backstory = backstory[:PLANNING_BACKSTORY_CHARS].rstrip() + "…"
+            lines.append(f"과거: {backstory}")
+        for rel in c.relationships:
+            other = names.get(rel.target_character_id, rel.target_character_id)
+            text = f"관계 → {other}: {rel.type}"
+            if rel.description:
+                text += f" — {rel.description}"
+            lines.append(text)
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks) if blocks else NONE_PLACEHOLDER
+
+
+def format_world_for_planning(world: WorldLore) -> str:
+    """The world summary plus its rules and places.
+
+    The summary alone is what the prose stages get; a stage that decides what
+    happens also needs what cannot happen (the rules) and where things can
+    happen (the places), or it plots around a world it has only half been told.
+    """
+    parts = [format_world_summary(world)]
+    if world.rules:
+        parts.append("Rules this world will not break:\n" + format_rules(world.rules))
+    if world.locations:
+        parts.append("Places:\n" + format_locations(world.locations))
+    return "\n\n".join(parts)
+
+
 def format_interaction_log(
     entries: Sequence[InteractionEntry],
     limit: int | None = None,

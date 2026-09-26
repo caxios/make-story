@@ -15,6 +15,12 @@ from fastapi.testclient import TestClient
 from storyweaver.agents import concept as agent
 from storyweaver.api import concept as route
 from storyweaver.concept_store import ConceptStore
+from storyweaver.models.structure import (
+    PlannedThread,
+    StoryPart,
+    StoryStructure,
+    tidy_structure,
+)
 from storyweaver.memory.manager import MemoryManager
 from storyweaver.models.concept import (
     ConceptCharacter,
@@ -112,16 +118,17 @@ def _concept(**overrides) -> StoryConcept:
 @pytest.fixture
 def stubbed(monkeypatch):
     """The agent, without a model behind it."""
-    calls: dict = {"propose": 0, "outline": 0, "refine": 0}
+    calls: dict = {"propose": 0, "outline": 0, "refine": 0, "layout": 0}
 
     def propose(seed="", count=3, llm=None):
         calls["propose"] += 1
         calls["seed"] = seed
         return [_concept(title=f"제안 {i}", episodes=[]) for i in range(count)]
 
-    def outline(concept, count=12, llm=None):
+    def outline(concept, count=12, llm=None, structure=None):
         calls["outline"] += 1
         calls["episodes"] = count
+        calls["structure"] = structure
         return concept.model_copy(
             update={
                 "episodes": [
@@ -137,7 +144,20 @@ def stubbed(monkeypatch):
 
     monkeypatch.setattr(route.agent, "propose", propose)
     monkeypatch.setattr(route.agent, "outline", outline)
+    def lay_out(target, work, **kwargs):
+        calls["layout"] += 1
+        calls["target"] = target
+        return tidy_structure(
+            StoryStructure(
+                target_episodes=target,
+                parts=[StoryPart(title="1부", start=1, end=target // 2),
+                       StoryPart(title="2부", start=target // 2 + 1, end=target)],
+                threads=[PlannedThread(name="흉터", plant=3, payoff=target - 5)],
+            )
+        )
+
     monkeypatch.setattr(route.agent, "refine", refine)
+    monkeypatch.setattr(route.layout, "lay_out", lay_out)
     return calls
 
 
@@ -280,7 +300,7 @@ def test_refining_without_a_session_is_a_404(client):
 def ready(client, stubbed, monkeypatch):
     """A session refined to the point of commit."""
     monkeypatch.setattr(
-        route.agent, "outline", lambda concept, count=12, llm=None: _concept()
+        route.agent, "outline", lambda concept, count=12, llm=None, structure=None: _concept()
     )
     client.post("/api/concept/propose", json={})
     client.post("/api/concept/choose", json={"index": 0})
@@ -307,7 +327,7 @@ def test_a_rules_id_is_cut_where_words_end(client, stubbed, monkeypatch, project
     """
     long_rule = "던전의 마력 소비 효율은 장부로 추적할 수 있으며 위조가 불가능하다."
     monkeypatch.setattr(
-        route.agent, "outline", lambda c, count=12, llm=None: _concept(rules=[long_rule])
+        route.agent, "outline", lambda c, count=12, llm=None, structure=None: _concept(rules=[long_rule])
     )
     client.post("/api/concept/propose", json={})
     client.post("/api/concept/choose", json={"index": 0})
@@ -325,7 +345,7 @@ def test_two_rules_that_open_the_same_way_still_get_their_own_id(
     monkeypatch.setattr(
         route.agent,
         "outline",
-        lambda c, count=12, llm=None: _concept(
+        lambda c, count=12, llm=None, structure=None: _concept(
             rules=["마법은 비밀이다. 예외는 없다.", "마법은 비밀이다. 다만 왕실은 안다."]
         ),
     )
@@ -364,7 +384,7 @@ def test_a_relationship_naming_nobody_is_dropped_and_reported(client, stubbed, m
     monkeypatch.setattr(
         route.agent,
         "outline",
-        lambda concept, count=12, llm=None: _concept(
+        lambda concept, count=12, llm=None, structure=None: _concept(
             characters=[_character("박동혁", relationships=["없는사람 — 친구"]), _character("시월")]
         ),
     )
@@ -407,7 +427,7 @@ def test_everything_lands_as_a_first_entry_the_author_can_change(ready, memory):
 
 def test_the_reasoning_is_kept_alongside_the_result(client, stubbed, monkeypatch, memory):
     """Otherwise the arc arrives looking like it was always obvious."""
-    monkeypatch.setattr(route.agent, "outline", lambda c, count=12, llm=None: _concept())
+    monkeypatch.setattr(route.agent, "outline", lambda c, count=12, llm=None, structure=None: _concept())
     client.post("/api/concept/propose", json={})
     client.post("/api/concept/choose", json={"index": 0})
     client.post("/api/concept/refine", json={"instruction": "분위기를 더 어둡게"})
@@ -445,7 +465,7 @@ def test_committing_over_an_existing_story_is_refused(
     client, stubbed, monkeypatch, project_store, sample_data
 ):
     """It would replace the world and append a second cast, quietly."""
-    monkeypatch.setattr(route.agent, "outline", lambda c, count=12, llm=None: _concept())
+    monkeypatch.setattr(route.agent, "outline", lambda c, count=12, llm=None, structure=None: _concept())
     project_store.save(project_from_sample(sample_data))
     client.post("/api/concept/propose", json={})
     client.post("/api/concept/choose", json={"index": 0})
@@ -459,7 +479,7 @@ def test_committing_over_an_existing_story_is_refused(
 def test_a_refused_commit_changes_nothing(
     client, stubbed, monkeypatch, project_store, sample_data
 ):
-    monkeypatch.setattr(route.agent, "outline", lambda c, count=12, llm=None: _concept())
+    monkeypatch.setattr(route.agent, "outline", lambda c, count=12, llm=None, structure=None: _concept())
     project_store.save(project_from_sample(sample_data))
     before = project_store.load()
     client.post("/api/concept/propose", json={})
@@ -529,7 +549,7 @@ def test_committing_works_with_memory_switched_off(project_store, stubbed, monke
     from storyweaver.api import deps
     from storyweaver.server import app
 
-    monkeypatch.setattr(route.agent, "outline", lambda c, count=12, llm=None: _concept())
+    monkeypatch.setattr(route.agent, "outline", lambda c, count=12, llm=None, structure=None: _concept())
     project_store.save(Project(name="새 이야기"))
     deps.set_store(project_store)
     deps.set_memory(None, "disabled")

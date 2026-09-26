@@ -17,7 +17,9 @@ import {
   Lightbulb,
   ListOrdered,
   MessagesSquare,
+  Pencil,
   RotateCcw,
+  Upload,
   Sparkles,
   Trash2,
 } from 'lucide-react'
@@ -26,13 +28,17 @@ import { useNavigate } from 'react-router-dom'
 
 import * as api from '@/api/client'
 import { ConceptCard } from '@/components/ConceptCard'
+import { ConceptEditor } from '@/components/ConceptEditor'
 import { ConceptTalk } from '@/components/ConceptTalk'
+import { LengthFields } from '@/components/LengthFields'
+import { StructureOverview } from '@/components/StructureOverview'
 import { useToast } from '@/components/ToastContext'
 import {
   Badge,
   Button,
   ConfirmDialog,
   EmptyState,
+  Modal,
   PageHeader,
   Panel,
   Tabs,
@@ -40,10 +46,17 @@ import {
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useProject } from '@/state/ProjectContext'
-import type { ConceptCommitResult, ConceptSession } from '@/types/storyweaver'
+import type {
+  ConceptCommitResult,
+  ConceptSession,
+  ConceptSyncResult,
+  StoryConcept,
+} from '@/types/storyweaver'
 
 /** How many chapters the opening outline covers. The author can redraw it. */
 const DEFAULT_EPISODES = 12
+/** How long the whole work is planned to run, until the author says. */
+const DEFAULT_TARGET = 200
 
 /**
  * The two ways in. They are tabs rather than a fork: an author who has been
@@ -69,12 +82,21 @@ export function ConceptStudio() {
   const [confirming, setConfirming] = useState(false)
   const [discarding, setDiscarding] = useState(false)
   const [result, setResult] = useState<ConceptCommitResult | null>(null)
+  const [target, setTarget] = useState(DEFAULT_TARGET)
+  const [editingConcept, setEditingConcept] = useState(false)
+  // 확정한 뒤 고친 것이 아직 작품에 들어가지 않았는지.
+  const [unsynced, setUnsynced] = useState(false)
+  const [syncPreview, setSyncPreview] = useState<ConceptSyncResult | null>(null)
+  const [opening, setOpening] = useState(DEFAULT_EPISODES)
 
   const load = useCallback(async () => {
     try {
       const view = await api.getConceptSession()
       setSession(view.session)
+      setUnsynced(view.unsynced)
       setSeed(view.session?.seed ?? '')
+      if (view.session?.target_episodes) setTarget(view.session.target_episodes)
+      if (view.session?.chosen?.episodes.length) setOpening(view.session.chosen.episodes.length)
     } catch (cause) {
       fromError(cause, '기획 세션을 불러오지 못했습니다.')
     } finally {
@@ -88,7 +110,11 @@ export function ConceptStudio() {
 
   const run = async (
     label: string,
-    call: () => Promise<{ session: ConceptSession | null; changed: string[] }>,
+    call: () => Promise<{
+      session: ConceptSession | null
+      changed: string[]
+      unsynced?: boolean
+    }>,
     onDone?: () => void,
   ) => {
     setBusy(label)
@@ -96,6 +122,7 @@ export function ConceptStudio() {
       const view = await call()
       setSession(view.session)
       setChanged(view.changed)
+      setUnsynced(Boolean(view.unsynced))
       onDone?.()
     } catch (cause) {
       fromError(cause)
@@ -108,7 +135,7 @@ export function ConceptStudio() {
     run('propose', () => api.proposeConcepts(seed.trim()), () => setChanged([]))
 
   const choose = (index: number) =>
-    run('choose', () => api.chooseConcept(index, DEFAULT_EPISODES))
+    run('choose', () => api.chooseConcept(index, Math.min(opening, target), target))
 
   const talk = () => {
     const message = said.trim()
@@ -123,12 +150,51 @@ export function ConceptStudio() {
   const clearTalk = () => run('clear', () => api.clearConceptTalk())
 
   const drawOutline = () =>
-    run('outline', () => api.redrawOutline(DEFAULT_EPISODES))
+    run('outline', () => api.redrawOutline(Math.min(opening, target), target))
 
   const refine = () => {
     if (!instruction.trim()) return
     const asked = instruction.trim()
     return run('refine', () => api.refineConcept(asked), () => setInstruction(''))
+  }
+
+  const saveEdit = (edited: StoryConcept) =>
+    run(
+      'edit',
+      () => api.editConcept(edited),
+      () => setEditingConcept(false),
+    )
+
+  const previewSync = async () => {
+    setBusy('preview')
+    try {
+      setSyncPreview(await api.previewConceptSync())
+    } catch (cause) {
+      fromError(cause, '반영할 내용을 확인하지 못했습니다.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const applySync = async () => {
+    setBusy('sync')
+    try {
+      const result = await api.syncConcept()
+      setSession(result.session)
+      setUnsynced(false)
+      setSyncPreview(null)
+      setChanged(result.applied)
+      await refresh()
+      success(
+        result.applied.length > 0
+          ? `작품에 ${result.applied.length}가지를 반영했습니다.`
+          : '반영할 변경이 없었습니다.',
+      )
+    } catch (cause) {
+      fromError(cause, '작품에 반영하지 못했습니다.')
+    } finally {
+      setBusy('')
+    }
   }
 
   const commit = async () => {
@@ -279,6 +345,18 @@ export function ConceptStudio() {
                       하나를 고르시면 회차 구상까지 펼쳐 드립니다.
                     </span>
                   </p>
+                  <Panel
+                    title="작품 분량"
+                    description="고르시면 이 분량으로 작품 전체의 부 구성과 떡밥 배치를 먼저 짜고, 처음 몇 화는 그 구조의 도입부 속도에 맞춰 구상합니다."
+                  >
+                    <LengthFields
+                      target={target}
+                      onTargetChange={setTarget}
+                      opening={opening}
+                      onOpeningChange={setOpening}
+                      disabled={Boolean(busy)}
+                    />
+                  </Panel>
                   <div className="grid gap-4 lg:grid-cols-3">
                     {proposals.map((proposal, index) => (
                       <ConceptCard
@@ -345,40 +423,52 @@ export function ConceptStudio() {
             </Panel>
           )}
 
-          {!committed && (
-            <Panel
-              title="더 다듬기"
-              description="평소 말하듯 적어 주세요. 시키신 것과 거기서 따라올 것만 바뀌고, 무엇이 바뀌었는지 위에 표시됩니다. 만족하실 때까지 몇 번이든 괜찮습니다."
-            >
-              <TextArea
-                rows={3}
-                placeholder="예: 주인공을 더 어리게 해줘 / 결말을 비극으로 바꿔줘 / 세계관을 좀 더 차갑게"
-                value={instruction}
-                onChange={(event) => setInstruction(event.target.value)}
-              />
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                <span className="text-xs text-ink-muted">
-                  지금까지 {Math.max((session?.turns.length ?? 0) - 1, 0)}번 손봤습니다
-                </span>
-                <div className="flex gap-2">
-                  {chosen.episodes.length === 0 && (
-                    <Button
-                      icon={ListOrdered}
-                      loading={busy === 'outline'}
-                      disabled={Boolean(busy)}
-                      onClick={() => void drawOutline()}
-                    >
-                      회차 구상 만들기
-                    </Button>
-                  )}
+          {/* 확정 뒤에도 연다. 한 번 정했다고 고칠 수 없으면 버리는 것 말고는 길이 없다. */}
+          <Panel
+            title={committed ? '기획 수정' : '더 다듬기'}
+            description={
+              committed
+                ? "확정한 뒤에도 기획을 다듬고 직접 고칠 수 있습니다. 고친 내용은 '작품에 반영'을 눌러야 작품에 들어가며, 그때 기획에서 바뀐 부분만 옮겨집니다 — 확정 후 위키나 워크숍에서 따로 고친 내용은 덮이지 않습니다."
+                : "평소 말하듯 적어 주세요. 시키신 것과 거기서 따라올 것만 바뀌고, 무엇이 바뀌었는지 위에 표시됩니다. 만족하실 때까지 몇 번이든 괜찮습니다. 원하는 대로 정확히 적고 싶으시면 '직접 수정'을 쓰세요."
+            }
+          >
+            <TextArea
+              rows={3}
+              placeholder="예: 주인공을 더 어리게 해줘 / 결말을 비극으로 바꿔줘 / 세계관을 좀 더 차갑게"
+              value={instruction}
+              onChange={(event) => setInstruction(event.target.value)}
+            />
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <span className="text-xs text-ink-muted">
+                지금까지 {Math.max((session?.turns.length ?? 0) - 1, 0)}번 손봤습니다
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  icon={Pencil}
+                  disabled={Boolean(busy)}
+                  onClick={() => setEditingConcept(true)}
+                >
+                  직접 수정
+                </Button>
+                <Button
+                  icon={Sparkles}
+                  loading={busy === 'refine'}
+                  disabled={!instruction.trim() || Boolean(busy)}
+                  onClick={() => void refine()}
+                >
+                  다듬기
+                </Button>
+                {committed ? (
                   <Button
-                    icon={Sparkles}
-                    loading={busy === 'refine'}
-                    disabled={!instruction.trim() || Boolean(busy)}
-                    onClick={() => void refine()}
+                    variant="primary"
+                    icon={Upload}
+                    loading={busy === 'preview' || busy === 'sync'}
+                    disabled={!unsynced || Boolean(busy)}
+                    onClick={() => void previewSync()}
                   >
-                    다듬기
+                    작품에 반영
                   </Button>
+                ) : (
                   <Button
                     variant="primary"
                     loading={busy === 'commit'}
@@ -387,31 +477,142 @@ export function ConceptStudio() {
                   >
                     이대로 작품 시작하기
                   </Button>
-                </div>
+                )}
               </div>
+            </div>
 
-              {chosen.episodes.length === 0 && (
-                <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-                  아직 회차 구상이 없습니다. 지금 만드셔도 되고, 컨셉을 더 다듬은 뒤에
-                  만드셔도 됩니다 — 어차피 회차별 상세 기획은 그 회차를 쓰기 직전에 따로
-                  하고, 작가님이 확인하신 뒤에야 집필이 시작됩니다.
+            {chosen.episodes.length === 0 && (
+              <p className="mt-3 text-xs leading-relaxed text-ink-muted">
+                아직 회차 구상이 없습니다. 아래 '작품 분량과 구조'에서 분량을 정하고 만드시면
+                됩니다. 지금 만드셔도 되고, 컨셉을 더 다듬은 뒤에 만드셔도 됩니다 — 회차별 상세
+                기획은 그 회차를 쓰기 직전에 따로 하고, 작가님이 확인하신 뒤에야 집필이 시작됩니다.
+              </p>
+            )}
+
+            {committed && unsynced && (
+              <p className="mt-3 text-xs text-accent-bright">
+                확정 뒤에 고친 내용이 아직 작품에 반영되지 않았습니다.
+              </p>
+            )}
+
+            {!committed && occupied && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warn/30 bg-warn/10 p-3 text-xs leading-relaxed text-warn-bright">
+                <p className="min-w-0 flex-1">
+                  이미 설정이 있는 작품입니다. 기획을 반영하면 세계관이 덮이고 인물과 회차가 섞이기
+                  때문에 거부됩니다. 새 작품으로 시작하시려면 설정에서 먼저 초기화해 주세요. 지금
+                  기획은 초기화해도 남습니다.
                 </p>
-              )}
+                <Button size="sm" onClick={() => navigate('/settings#reset')}>
+                  초기화하러 가기
+                </Button>
+              </div>
+            )}
+          </Panel>
 
-              {occupied && (
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warn/30 bg-warn/10 p-3 text-xs leading-relaxed text-warn-bright">
-                  <p className="min-w-0 flex-1">
-                    이미 설정이 있는 작품입니다. 기획을 반영하면 세계관이 덮이고 인물과
-                    회차가 섞이기 때문에 거부됩니다. 새 작품으로 시작하시려면 설정에서
-                    먼저 초기화해 주세요. 지금 기획은 초기화해도 남습니다.
+          <Panel
+            title="작품 분량과 구조"
+            description={
+              session?.structure
+                ? `전체 ${session.structure.target_episodes}화를 ${session.structure.parts.length}부로 나누고 떡밥 ${session.structure.threads.length}개를 배치했습니다. 회차 구상은 이 구조의 도입부 속도에 맞춰져 있습니다.`
+                : '아직 분량이 정해지지 않았습니다. 분량을 정하고 구조를 짜면, 회차 구상이 그 분량의 도입부 속도로 맞춰집니다.'
+            }
+          >
+            {!committed && (
+              <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
+                <LengthFields
+                  target={target}
+                  onTargetChange={setTarget}
+                  opening={opening}
+                  onOpeningChange={setOpening}
+                  disabled={Boolean(busy)}
+                />
+                <Button
+                  icon={ListOrdered}
+                  loading={busy === 'outline'}
+                  disabled={Boolean(busy)}
+                  onClick={() => void drawOutline()}
+                >
+                  {session?.structure
+                    ? '이 분량으로 구조·구상 다시 짜기'
+                    : '구조와 회차 구상 만들기'}
+                </Button>
+              </div>
+            )}
+            {committed && (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line p-3 text-xs leading-relaxed text-ink-dim">
+                <span>
+                  확정한 뒤의 분량과 구조는 에피소드 큐의 '작품 구조'에서 바꿉니다. 아직 안 쓴 회차
+                  개요도 거기서 새 분량에 맞춰 다시 짤 수 있습니다.
+                </span>
+                <Button size="sm" icon={ListOrdered} onClick={() => navigate('/episodes')}>
+                  작품 구조로
+                </Button>
+              </div>
+            )}
+            {session?.structure && <StructureOverview structure={session.structure} />}
+          </Panel>
+
+          <ConceptEditor
+            open={editingConcept}
+            concept={chosen}
+            saving={busy === 'edit'}
+            onClose={() => setEditingConcept(false)}
+            onSave={(edited) => void saveEdit(edited)}
+          />
+
+          <Modal
+            open={syncPreview !== null}
+            onClose={() => setSyncPreview(null)}
+            wide
+            title="작품에 반영할 내용"
+            description="확정(또는 지난 반영) 이후 기획에서 바뀐 부분만 옮깁니다. 아직 아무것도 바뀌지 않았습니다."
+            footer={
+              <>
+                <Button onClick={() => setSyncPreview(null)} disabled={busy === 'sync'}>
+                  취소
+                </Button>
+                <Button
+                  variant="primary"
+                  icon={Upload}
+                  loading={busy === 'sync'}
+                  onClick={() => void applySync()}
+                >
+                  반영
+                </Button>
+              </>
+            }
+          >
+            {syncPreview && (
+              <div className="space-y-4 text-sm">
+                <div>
+                  <p className="mb-1.5 font-medium text-ink">
+                    반영되는 것 ({syncPreview.applied.length})
                   </p>
-                  <Button size="sm" onClick={() => navigate('/settings#reset')}>
-                    초기화하러 가기
-                  </Button>
+                  {syncPreview.applied.length > 0 ? (
+                    <ul className="space-y-1 text-ink-dim">
+                      {syncPreview.applied.map((line) => (
+                        <li key={line}>· {line}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-ink-muted">작품에 옮길 변경이 없습니다.</p>
+                  )}
                 </div>
-              )}
-            </Panel>
-          )}
+                {syncPreview.skipped.length > 0 && (
+                  <div>
+                    <p className="mb-1.5 font-medium text-warn-bright">
+                      반영되지 않는 것 ({syncPreview.skipped.length})
+                    </p>
+                    <ul className="space-y-1 text-ink-dim">
+                      {syncPreview.skipped.map((line) => (
+                        <li key={line}>· {line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </Modal>
 
           <ConceptCard concept={chosen} expanded />
 

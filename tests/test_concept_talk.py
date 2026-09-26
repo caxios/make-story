@@ -23,6 +23,7 @@ from storyweaver.agents import concept as agent
 from storyweaver.api import concept as route
 from storyweaver.concept_store import ConceptStore
 from storyweaver.memory.manager import MemoryManager
+from storyweaver.models.structure import StoryPart, StoryStructure
 from storyweaver.models.concept import (
     ConceptCharacter,
     ConceptEpisode,
@@ -103,7 +104,7 @@ def stubbed(monkeypatch):
         calls["distilled"] = list(messages)
         return _concept()
 
-    def outline(concept, count=12, llm=None):
+    def outline(concept, count=12, llm=None, structure=None):
         calls["outline"] += 1
         return concept.model_copy(
             update={
@@ -115,7 +116,14 @@ def stubbed(monkeypatch):
 
     monkeypatch.setattr(route.agent, "talk", talk)
     monkeypatch.setattr(route.agent, "distill", distill)
+    def lay_out(target, work, **kwargs):
+        calls["layout"] = calls.get("layout", 0) + 1
+        return StoryStructure(
+            target_episodes=target, parts=[StoryPart(title="전체", start=1, end=target)]
+        )
+
     monkeypatch.setattr(route.agent, "outline", outline)
+    monkeypatch.setattr(route.layout, "lay_out", lay_out)
     return calls
 
 
@@ -495,3 +503,19 @@ def test_several_blocks_are_joined_rather_than_one_dropped():
     )
 
     assert result == "앞부분.\n\n뒷부분."
+
+
+def test_nothing_in_the_concept_stage_is_capped(monkeypatch):
+    """The whole plan is rewritten on every call — a thirty-person cast
+    included — and under the shared cap characters went missing."""
+    from storyweaver import llm
+
+    built = {}
+    monkeypatch.setattr(llm, "build_model", lambda t, m: built.setdefault("max", m))
+
+    llm.get_llm(stage="concept").model_for(0.9)
+    assert built["max"] == llm.MODEL_MAX_OUTPUT_TOKENS
+
+    built.clear()
+    llm.get_llm(stage="writer").model_for(0.8)
+    assert built["max"] is None  # other stages keep the shared cap

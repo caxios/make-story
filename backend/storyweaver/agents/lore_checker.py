@@ -14,6 +14,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from storyweaver.agents import context
+from storyweaver.agents.flow import flow_block
 from storyweaver.agents.prompts import render_prompt
 from storyweaver import telemetry
 from storyweaver.llm import get_llm
@@ -91,6 +92,7 @@ def build_prompt(
     world: WorldLore,
     characters: Mapping[str, CharacterProfile],
     scene: Scene | None = None,
+    story_flow: str = "",
 ) -> str:
     """Render the Lore Checker prompt for a scene's log."""
     present_ids = (
@@ -111,6 +113,7 @@ def build_prompt(
         scene_title=scene.title if scene is not None else "unspecified",
         location=location,
         objective=scene.objective if scene is not None else "unspecified",
+        story_flow=flow_block(story_flow),
         interaction_log=context.format_interaction_log(
             entries, characters=characters, show_turns=True
         ),
@@ -141,12 +144,13 @@ def check(
     characters: Mapping[str, CharacterProfile],
     scene: Scene | None = None,
     llm=None,
+    story_flow: str = "",
 ) -> ValidationResult:
     """Validate an interaction log. An empty log trivially passes."""
     if not entries:
         return ValidationResult(passed=True)
 
-    prompt = build_prompt(entries, world, characters, scene)
+    prompt = build_prompt(entries, world, characters, scene, story_flow)
     model = telemetry.meter(llm or get_llm(stage="lore"), "lore")
     result: ValidationResult = model.with_structured_output(ValidationResult).invoke(prompt)
 
