@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, StringConstraints
 from storyweaver import telemetry
 from storyweaver.agents import context as ctx
 from storyweaver.agents import director
+from storyweaver.agents import history
 from storyweaver.agents import next_episode
 from storyweaver.agents.flow import episode_flow
 from storyweaver.agents.concept import reply_text
@@ -136,6 +137,7 @@ def _expand_summary(
     story_so_far: str,
     prior_summaries: list[str],
     brief: str = "",
+    record: str = "",
 ) -> str:
     """Draw one line out into an outline the Director can decompose.
 
@@ -148,6 +150,8 @@ def _expand_summary(
     # pointing at nothing.
     direction_text = f"\n\n--- WHERE THE WORK IS HEADED ---\n{brief}" if brief.strip() else ""
     prior_text = ""
+    if record.strip():
+        prior_text += f"\n\n--- WHAT HAS HAPPENED TO EACH OF THEM ---\n{record}"
     if story_so_far:
         prior_text += f"\n\n--- EPISODES ALREADY IN THE QUEUE ---\n{story_so_far}"
     if prior_summaries:
@@ -317,6 +321,7 @@ def draft_episode_batch(
             closing=_closing_of_last(project, memory),
             direction=body.direction,
             range_text=describe_range(project.structure, start, end),
+            record=_record(project, start),
         )
     except Exception as error:  # noqa: BLE001 — reported to the author
         logger.exception("Drafting episodes %d-%d failed", start, end)
@@ -358,6 +363,7 @@ def plan_all_episodes(
     # Outlines are approved by the author and become the storyline every later
     # stage reads, so they are drawn from the cast and world as the story has
     # left them, not as they were first written down.
+    record = _record(project, first_number)
     project = deps.folded_project(project)
 
     results: list[ExpandedEpisodeSummary] = []
@@ -371,6 +377,7 @@ def plan_all_episodes(
             project=project,
             story_so_far=story_so_far,
             prior_summaries=prior_summaries,
+            record=record,
             brief=planning_brief(
                 memory.chronicle if memory is not None else None, project.structure, episode_number
             ),
@@ -430,6 +437,7 @@ def draft_next_episode(
         outline = next_episode.draft(
             folded, brief=brief, threads=threads, closing=closing, direction=body.direction,
             position=describe_position(project.structure, project.next_episode_number()),
+            record=_record(project, project.next_episode_number()),
         )
     except Exception as error:  # noqa: BLE001 — reported to the author
         logger.exception("Drafting the next episode failed")
@@ -440,6 +448,16 @@ def draft_next_episode(
     return DraftNextResponse(
         episode_number=project.next_episode_number(), author_storyline=outline
     )
+
+
+def _record(project: Project, before: int) -> str:
+    """What the story has done to each element before episode `before`.
+
+    Drawn from the stored project rather than the folded one: the fold is the
+    current setting, and this is the history that led to it.
+    """
+    memory = deps.get_memory()
+    return history.story_record(memory.chronicle if memory is not None else None, project, before)
 
 
 def _closing_of_last(project: Project, memory) -> str:
@@ -725,6 +743,10 @@ def draft_plan(episode_number: int) -> dict:
         project.structure,
         episode.episode_number,
     )
+    # And what the story has done to each of the people and places in it, so
+    # the plan builds on their history rather than only on their sheet.
+    record = history.with_heading(_record(project, episode.episode_number))
+    brief = "\n\n".join(part for part in (brief, record) if part)
 
     try:
         scenes = director.decompose_episode(

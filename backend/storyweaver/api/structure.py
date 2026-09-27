@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from storyweaver.agents import context as ctx
+from storyweaver.agents import history
 from storyweaver.agents import structure as layout
 from storyweaver.api import deps
 from storyweaver.models.structure import (
@@ -192,6 +193,19 @@ def draft_structure(body: DraftRequest) -> DraftResponse:
 
     folded = deps.folded_project(project)
     work = _describe_work(folded)
+    # What the story has done to each element so far: a layout that plants and
+    # pays off threads across the rest of the book has to know what is already
+    # set up, character by character.
+    memory = deps.get_memory()
+    record = history.with_heading(
+        history.story_record(
+            memory.chronicle if memory is not None else None,
+            project,
+            project.next_episode_number(),
+        )
+    )
+    if record:
+        work = f"{work}\n\n{record}"
     so_far = _story_so_far(project)
 
     try:

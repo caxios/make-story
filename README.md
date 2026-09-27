@@ -66,9 +66,9 @@ On a fresh project the order is:
    every stage that outlines an episode is told its place in the whole.
 
    The plan stays editable after committing: refine it or **직접 수정** (edit
-   any field by hand), then **작품에 반영** carries over only what changed in
-   the plan since it was last applied — edits made in the wiki or workshop in
-   the meantime are not overwritten. Removals are not carried over; delete
+   any field by hand), and the change reaches the work as soon as it is saved —
+   only what changed in the plan moves, and edits made in the wiki or workshop
+   in the meantime are not overwritten. Removals are not carried over; delete
    characters, rules and places on their own screens.
 1. **🌍 세계관 빌더** opens on **빠른 설정**, because the world is empty. Describe
    the setting in a paragraph and it fills in the title, genre, tone, rules and
@@ -89,6 +89,14 @@ On a fresh project the order is:
    after it, marked as plans, so a chapter neither contradicts the last one nor
    stages what the next is for. The planned ending still reaches the Director
    only.
+
+   Every stage that plans — the structure, the twenty-at-once outlines, a
+   single outline, the Director's plan — also reads what the story has done to
+   each character, faction, place and rule: the last forty episodes *that
+   element* appeared in, in full, and a summary of everything older (made once
+   by the model and cached, extended as the window slides). Settings you edited
+   — character sheets, wiki sections, faction descriptions — are given as their
+   latest version only; what they said before is not.
 5. When the chapter is done you are shown **what it recorded** about the cast and
    the world. Only what you accept reaches the next chapter.
 6. **📖 위키** — every setting, and the history of how it got that way. Anything
@@ -178,7 +186,7 @@ Generation reports real progress, driven by the pipeline itself:
 ## Command line
 
 ```bash
-pytest                                        # 928 tests, no API key and no network (enforced, not assumed)
+pytest                                        # 950 tests, no API key and no network (enforced, not assumed)
 python -m storyweaver.smoke_test              # is the model binding working?
 python -m storyweaver.demo_scene --two        # one scene, printed
 python -m storyweaver.demo_episode --memory   # one episode, with continuity

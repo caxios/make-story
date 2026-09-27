@@ -19,6 +19,14 @@ will later break into scenes.
 
 {world}
 
+## What has happened to each of them
+
+Each character, faction, place and rule, with what the story has done to it:
+its last forty appearances in full, earlier ones summarised. Plan from this —
+a thread is set up in someone's history before it can pay off.
+
+{record}
+
 ## The story so far
 
 Episodes marked (written) have been written and their summary is what actually

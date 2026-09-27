@@ -29,7 +29,7 @@ from sse_starlette.sse import EventSourceResponse
 from starlette.concurrency import iterate_in_threadpool
 
 from storyweaver import telemetry
-from storyweaver.agents import episode_runner
+from storyweaver.agents import episode_runner, history
 from storyweaver.agents.flow import episode_flow
 from storyweaver.api import deps, telemetry as telemetry_log
 from storyweaver.ui.progress import NODE_STAGES, GenerationProgress
@@ -279,11 +279,7 @@ def _start_job(project: Project, episode_number: int, max_turns: int) -> _Job:
                         # around it; the Director alone also sees where the
                         # whole work is headed.
                         story_flow=episode_flow(project.episodes, episode_number),
-                        story_brief=planning_brief(
-                            memory.chronicle if memory is not None else None,
-                            project.structure,
-                            episode_number,
-                        ),
+                        story_brief=_director_brief(project, memory, episode_number),
                     )
                 except Exception as error:  # noqa: BLE001 — reported to the client
                     logger.exception("Episode %d failed", episode_number)
@@ -302,6 +298,15 @@ def _start_job(project: Project, episode_number: int, max_turns: int) -> _Job:
     job.thread = threading.Thread(target=work, name=f"generate-{episode_number}", daemon=True)
     job.thread.start()
     return job
+
+
+def _director_brief(project: Project, memory, episode_number: int) -> str:
+    """Where the work is going, where this episode sits, and what has happened
+    to everyone in it so far — for the Director alone."""
+    store = memory.chronicle if memory is not None else None
+    record = history.with_heading(history.story_record(store, project, episode_number))
+    brief = planning_brief(store, project.structure, episode_number)
+    return "\n\n".join(part for part in (brief, record) if part)
 
 
 def _settle(job: _Job, checkpoints) -> None:

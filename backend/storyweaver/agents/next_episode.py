@@ -18,6 +18,9 @@ What the model is shown, and why:
   happen before this one, so it has to be built on too;
 - **the closing passage** of the last chapter, when the last chapter is written
   — the most exact answer to "where are we";
+- **what the story has done to each character, faction, place and rule** —
+  each one's last forty appearances in full, older ones as a digest
+  (`agents/history.py`), so a thread can be built on someone's history;
 - **the open plot threads**, quietest first — the ones a reader will think were
   forgotten;
 - **where the episode sits in the whole work** — its part, how much of the
@@ -52,6 +55,7 @@ NO_BRIEF = "(작품의 전체 방향이 따로 적혀 있지 않습니다. 지�
 NO_EPISODES = "(아직 아무 회차도 없습니다. 이것이 첫 회입니다.)"
 NO_THREADS = "(기록된 떡밥이 없습니다.)"
 NO_DIRECTION = "(따로 없습니다. 이야기에 가장 좋은 다음 회차를 정하세요.)"
+NO_RECORD = "(아직 작품 속에서 기록된 일이 없습니다.)"
 NO_POSITION = (
     "(전체 분량이 정해져 있지 않습니다. 연재 웹소설의 한 회차답게 한 걸음만 나아가고, "
     "결말을 앞당기지 마세요.)"
@@ -101,6 +105,7 @@ def build_prompt(
     closing: str = "",
     direction: str = "",
     position: str = "",
+    record: str = "",
 ) -> str:
     number = project.next_episode_number()
     return render_prompt(
@@ -116,6 +121,7 @@ def build_prompt(
         threads=format_threads(threads, number),
         direction=direction.strip() or NO_DIRECTION,
         position=position.strip() or NO_POSITION,
+        record=record.strip() or NO_RECORD,
     )
 
 
@@ -127,12 +133,13 @@ def draft(
     closing: str = "",
     direction: str = "",
     position: str = "",
+    record: str = "",
     llm=None,
 ) -> str:
     """The outline for the next episode. One model call; nothing is saved."""
     prompt = build_prompt(
         project, brief=brief, threads=threads, closing=closing, direction=direction,
-        position=position,
+        position=position, record=record,
     )
     model = telemetry.meter(llm or get_llm(stage="planner"), "planner")
     outline = reply_text(model.invoke(prompt))
@@ -172,6 +179,7 @@ def build_batch_prompt(
     closing: str = "",
     direction: str = "",
     range_text: str = "",
+    record: str = "",
 ) -> str:
     start = project.next_episode_number()
     end = start + count - 1
@@ -190,6 +198,7 @@ def build_batch_prompt(
         closing=closing.strip(),
         threads=format_threads(threads, start),
         direction=direction.strip() or NO_DIRECTION,
+        record=record.strip() or NO_RECORD,
     )
 
 
@@ -202,6 +211,7 @@ def draft_batch(
     closing: str = "",
     direction: str = "",
     range_text: str = "",
+    record: str = "",
     llm=None,
 ) -> list[tuple[int, str]]:
     """Outlines for the next `count` episodes, planned as one run.
@@ -215,7 +225,7 @@ def draft_batch(
 
     prompt = build_batch_prompt(
         project, count, brief=brief, threads=threads, closing=closing,
-        direction=direction, range_text=range_text,
+        direction=direction, range_text=range_text, record=record,
     )
     # Twenty paragraphs is long, and a cut-off answer loses the last episodes
     # silently; planning is not held to the shared cap.

@@ -123,6 +123,8 @@ export function ConceptStudio() {
       setSession(view.session)
       setChanged(view.changed)
       setUnsynced(Boolean(view.unsynced))
+      // 확정한 작품의 기획을 고치면 서버가 바로 작품에 반영한다. 화면의 작품도 새로.
+      if (view.session?.status === 'committed') await refresh()
       onDone?.()
     } catch (cause) {
       fromError(cause)
@@ -428,7 +430,7 @@ export function ConceptStudio() {
             title={committed ? '기획 수정' : '더 다듬기'}
             description={
               committed
-                ? "확정한 뒤에도 기획을 다듬고 직접 고칠 수 있습니다. 고친 내용은 '작품에 반영'을 눌러야 작품에 들어가며, 그때 기획에서 바뀐 부분만 옮겨집니다 — 확정 후 위키나 워크숍에서 따로 고친 내용은 덮이지 않습니다."
+                ? "확정한 뒤에도 기획을 다듬고 직접 고칠 수 있습니다. 고친 내용은 저장하는 즉시 작품에 반영되며, 기획에서 바뀐 부분만 옮겨집니다 — 확정 후 위키나 워크숍에서 따로 고친 내용은 덮이지 않습니다. 무엇이 반영됐는지는 위에 표시됩니다."
                 : "평소 말하듯 적어 주세요. 시키신 것과 거기서 따라올 것만 바뀌고, 무엇이 바뀌었는지 위에 표시됩니다. 만족하실 때까지 몇 번이든 괜찮습니다. 원하는 대로 정확히 적고 싶으시면 '직접 수정'을 쓰세요."
             }
           >
@@ -459,6 +461,8 @@ export function ConceptStudio() {
                   다듬기
                 </Button>
                 {committed ? (
+                  // 자동 반영 전에 고쳐 두고 아직 옮기지 않은 것이 남은 경우에만.
+                  unsynced && (
                   <Button
                     variant="primary"
                     icon={Upload}
@@ -468,6 +472,7 @@ export function ConceptStudio() {
                   >
                     작품에 반영
                   </Button>
+                  )
                 ) : (
                   <Button
                     variant="primary"

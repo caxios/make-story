@@ -163,6 +163,36 @@ def _keep_baseline(session: ConceptSession) -> None:
         session.committed_concept = session.chosen
 
 
+def _auto_sync(session: ConceptSession) -> list[str]:
+    """Carry an edit of a committed concept into the work, right away.
+
+    Once the novel exists, the concept is one of the places the author edits
+    it, and an edit that waits for a second button is an edit the planners do
+    not see. Only what changed since the last sync moves; what the author has
+    since changed in the wiki or the workshop is not overwritten. Returns what
+    happened, as lines for the turn.
+    """
+    if session.status != "committed" or session.chosen is None:
+        return []
+    before = session.committed_concept or session.chosen
+    after = session.chosen
+    if before == after:
+        return []
+
+    with deps.write_lock():
+        project = deps.get_project()
+        memory = deps.get_memory()
+        report = sync_concept(
+            project, memory.chronicle if memory is not None else None, before, after
+        )
+        deps.save_project(project)
+    session.committed_concept = after
+    return [
+        *(f"작품에 반영: {line}" for line in report.applied),
+        *(f"반영 안 됨: {line}" for line in report.skipped),
+    ]
+
+
 def _model_failed(error: Exception, what: str) -> HTTPException:
     logger.exception("The concept agent failed while %s", what)
     return HTTPException(status_code=502, detail=f"기획을 {what} 실패했습니다: {error}")
@@ -287,6 +317,7 @@ def redraw_outline(body: OutlineRequest = Body(default_factory=OutlineRequest)) 
     # The layout is drawn again too: a redraw is usually because the length
     # changed, or because the concept was refined since it was last laid out.
     redrawn, structure = _lay_out_and_outline(chosen, body.episodes, target)
+    _keep_baseline(session)
 
     changed = [
         f"전체 {target}화를 {len(structure.parts)}부로 나누고 "
@@ -296,6 +327,7 @@ def redraw_outline(body: OutlineRequest = Body(default_factory=OutlineRequest)) 
     session.chosen = redrawn
     session.structure = structure
     session.target_episodes = target
+    changed += _auto_sync(session)
     session.turns.append(
         ConceptTurn(
             turn=len(session.turns),
@@ -324,6 +356,7 @@ def refine(body: RefineRequest) -> SessionView:
         raise _model_failed(error, "다듬는 데") from error
 
     session.chosen = revised
+    changed = [*changed, *_auto_sync(session)]
     session.turns.append(
         ConceptTurn(turn=len(session.turns), instruction=body.instruction, changed=changed)
     )
@@ -398,8 +431,13 @@ def build_from_talk(
     if concept.episodes:
         changed.append(f"회차 구상 {len(concept.episodes)}개를 만들었습니다")
 
+    # Already a novel: the conversation's concept is an edit of it.
+    _keep_baseline(session)
     session.chosen = concept
-    session.status = "refining"
+    if session.status == "committed":
+        changed += _auto_sync(session)
+    else:
+        session.status = "refining"
     session.turns.append(
         ConceptTurn(turn=len(session.turns), instruction="대화한 내용으로 정리", changed=changed)
     )
@@ -438,6 +476,7 @@ def edit_chosen(body: EditRequest) -> SessionView:
     changed = agent.describe_changes(chosen, edited)
 
     session.chosen = edited
+    changed = [*changed, *_auto_sync(session)]
     session.turns.append(
         ConceptTurn(turn=len(session.turns), instruction="직접 수정", changed=changed)
     )

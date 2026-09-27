@@ -71,15 +71,18 @@ def test_the_brief_leaves_out_sections_the_author_has_not_written(chronicle):
     assert brief == f"전체 아크: {ARC}"
 
 
-def test_the_brief_does_not_carry_the_premise_or_the_episode_outline(planned):
-    """Only direction. The premise is why the author is writing it, and the
-    outline is the very thing the planner is being asked to produce."""
+def test_the_brief_carries_the_latest_premise_but_not_the_episode_outline(planned):
+    """The premise as last edited on the story page — an edit there reaches the
+    planners through nothing else. The outline is the very thing the planner
+    is being asked to produce."""
     planned.record("story", STORY_SUBJECT_ID, "premise", "성장물을 쓰고 싶었다", source="author")
+    planned.record("story", STORY_SUBJECT_ID, "premise", "복수극으로 고쳐 썼다", source="author")
     planned.record("story", STORY_SUBJECT_ID, "episodes", "1화 — 시월이 찾아온다", source="author")
 
     brief = story_brief(planned)
 
-    assert "성장물을 쓰고 싶었다" not in brief
+    assert "기획 의도: 복수극으로 고쳐 썼다" in brief
+    assert "성장물을 쓰고 싶었다" not in brief  # only the latest version
     assert "시월이 찾아온다" not in brief
 
 

@@ -44,6 +44,10 @@ def story_brief(store: ChronicleStore | None) -> str:
     parts: list[str] = []
     for section, label in (
         ("logline", "한 줄 요약"),
+        # The story page's own, as last edited. The world overview was copied
+        # from it once, at commit; an edit on the page afterwards reaches the
+        # planners only through here.
+        ("premise", "기획 의도"),
         ("arc", "전체 아크"),
         ("ending", "계획된 결말"),
     ):
