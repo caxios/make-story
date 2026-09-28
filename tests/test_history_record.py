@@ -327,11 +327,11 @@ def test_the_directors_plan_is_drawn_from_the_record(client, monkeypatch):
 
     seen = {}
 
-    def decompose(episode, world, characters, **kwargs):
+    def plan_episode(episode, world, characters, **kwargs):
         seen.update(kwargs)
-        return []
+        return director.DirectorPlan(scenes=[])
 
-    monkeypatch.setattr(director, "decompose_episode", decompose)
+    monkeypatch.setattr(director, "plan_episode", plan_episode)
     client.post("/api/episodes/3/plan")
 
     assert "작중 기록" in seen["story_brief"]

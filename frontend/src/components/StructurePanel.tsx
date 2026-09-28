@@ -13,6 +13,7 @@ import { ChevronDown, LayoutList, Pencil, Plus, RotateCcw, Trash2 } from 'lucide
 import { useCallback, useEffect, useState } from 'react'
 
 import * as api from '@/api/client'
+import { useSettingsRegistration } from '@/lib/useSettingsRegistration'
 import { LengthFields } from '@/components/LengthFields'
 import { StructureOverview } from '@/components/StructureOverview'
 import { useToast } from '@/components/ToastContext'
@@ -143,6 +144,7 @@ function RedrawModal({
   onApplied: (next: StructureView) => Promise<void>
 }) {
   const { success, fromError } = useToast()
+  const { registerFrom } = useSettingsRegistration()
   const [target, setTarget] = useState(view.structure?.target_episodes ?? 200)
   const [instruction, setInstruction] = useState('')
   const [rewrite, setRewrite] = useState(true)
@@ -191,6 +193,8 @@ function RedrawModal({
       )
       setDraft(null)
       await onApplied(next)
+      // 다시 쓴 개요에 새로 나온 인물·설정을 등록한다.
+      void registerFrom(episodes.map((e) => e.episode_number))
     } catch (cause) {
       fromError(cause, '적용하지 못했습니다.')
     } finally {

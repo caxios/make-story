@@ -45,7 +45,7 @@ import {
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useProject } from '@/state/ProjectContext'
-import type { Location, Rule, WorldLore } from '@/types/storyweaver'
+import type { Location, Rule, WikiSection, WorldLore } from '@/types/storyweaver'
 
 const GENRES = [
   'fantasy',
@@ -359,7 +359,57 @@ function OverviewTab({ world, onSaved }: { world: WorldLore; onSaved: () => Prom
           />
         </div>
       </Panel>
+      <AddedLore world={world} />
     </div>
+  )
+}
+
+/**
+ * 회차 개요·기획서에서 더해진 세계 설정 (마나석의 성질, 왕국의 역사 같은 것).
+ * 위키 세계 페이지에 섹션으로 들어가고, 모든 에이전트가 세계관과 함께 읽는다.
+ * 고치거나 지우는 건 위키에서.
+ */
+function AddedLore({ world }: { world: WorldLore }) {
+  const navigate = useNavigate()
+  const [sections, setSections] = useState<WikiSection[]>([])
+
+  useEffect(() => {
+    let live = true
+    api
+      .getWikiPage('world', 'world')
+      .then((page) => {
+        if (live) setSections(page.sections.filter((s) => s.author_made && s.current.trim()))
+      })
+      .catch(() => {
+        // 위키가 없는 설정(메모리 비활성)이면 보여줄 것도 없다.
+      })
+    return () => {
+      live = false
+    }
+  }, [world])
+
+  if (sections.length === 0) return null
+  return (
+    <Panel
+      title="더해진 세계 설정"
+      description="회차 개요나 기획서에 새로 나온 세계 설정입니다. 모든 에이전트가 세계관과 함께 읽습니다."
+      actions={
+        <Button size="sm" icon={BookMarked} onClick={() => navigate('/wiki/world/world')}>
+          위키에서 고치기
+        </Button>
+      }
+    >
+      <dl className="space-y-3">
+        {sections.map((section) => (
+          <div key={section.key}>
+            <dt className="text-sm font-medium text-ink">{section.title}</dt>
+            <dd className="mt-0.5 whitespace-pre-line text-sm leading-relaxed text-ink-dim">
+              {section.current}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </Panel>
   )
 }
 

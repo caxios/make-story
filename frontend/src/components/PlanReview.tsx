@@ -26,6 +26,7 @@ import { useEffect, useState } from 'react'
 import * as api from '@/api/client'
 import { ExpressionControls, type Expression } from '@/components/ExpressionControls'
 import { useToast } from '@/components/ToastContext'
+import { useSettingsRegistration } from '@/lib/useSettingsRegistration'
 import {
   Badge,
   Button,
@@ -104,6 +105,7 @@ export function PlanReview({
   onApprove: () => void
 }) {
   const { success, fromError } = useToast()
+  const { announce } = useSettingsRegistration()
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [expression, setExpression] = useState<Expression>(expressionOf(episode))
   const [saving, setSaving] = useState(false)
@@ -176,7 +178,7 @@ export function PlanReview({
               },
         )
       }
-      await api.savePlan(
+      const saved = await api.savePlan(
         episodeNumber,
         drafts.map((draft) => ({
           title: draft.title.trim(),
@@ -190,6 +192,8 @@ export function PlanReview({
       )
       await onChanged()
       success('기획서를 저장했습니다')
+      // 기획서에 새로 나온 인물·장소·설정은 서버가 저장하며 등록했다.
+      void announce(saved.registered, saved.registration_error)
       return true
     } catch (cause) {
       fromError(cause, '기획서를 저장하지 못했습니다.')
@@ -202,9 +206,10 @@ export function PlanReview({
   const redraft = async () => {
     setRedrafting(true)
     try {
-      await api.draftPlan(episodeNumber)
+      const drafted = await api.draftPlan(episodeNumber)
       await onChanged()
       success('기획서를 다시 짰습니다')
+      void announce(drafted.registered, drafted.registration_error)
     } catch (cause) {
       fromError(cause, '기획서를 다시 짜지 못했습니다.')
     } finally {

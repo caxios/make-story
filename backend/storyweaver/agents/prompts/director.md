@@ -58,8 +58,7 @@ neutral.
 - Respect all world rules provided. Never write a scene that requires breaking one.
 - Order the participating characters by who drives the scene — the first listed
   character opens it, and the rest follow in that order.
-- Use ONLY the character ids and location ids listed below, exactly as spelled.
-  If no listed location fits, leave the location empty rather than inventing one.
+{new_elements}
 - Give every scene a different objective and, where the story allows, a
   different location. Two scenes that accomplish the same thing are one scene.
 

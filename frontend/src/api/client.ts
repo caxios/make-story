@@ -354,6 +354,17 @@ export const savePlan = (episodeNumber: number, scenes: PlannedSceneInput[]) =>
     body: { scenes },
   })
 
+/**
+ * 저장한 회차 개요에서 새로 생긴 설정을 읽어 작품에 등록한다 — 새 인물은 캐릭터
+ * 워크숍, 장소·규칙은 세계관 빌더, 세력·세계 설정은 위키, 작품 방향은 작품
+ * 페이지와 작품기획으로. 이미 읽은 개요는 다시 읽지 않는다.
+ */
+export const extractSettings = (episodeNumbers: number[]) =>
+  request<{ registered: string[] }>('/api/episodes/extract-settings', {
+    method: 'POST',
+    body: { episode_numbers: episodeNumbers },
+  })
+
 export const summarizeEpisode = (episodeNumber: number) =>
   request<Episode>(`/api/episodes/${episodeNumber}/summarize`, { method: 'POST' })
 

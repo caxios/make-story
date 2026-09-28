@@ -183,8 +183,26 @@ def fold_world(store: ChronicleStore, base: WorldLore) -> WorldLore:
         update={
             "rules": [rule for rule in rules if rule.active],
             "locations": [fold_location(store, place) for place in base.locations],
+            "additional_lore": {**base.additional_lore, **_world_sections(store)},
         }
     )
+
+
+def _world_sections(store: ChronicleStore) -> dict[str, str]:
+    """The sections the author (or an outline) added to the world page.
+
+    A world fact written down in episode 14's outline lives there, and
+    `additional_lore` is how every agent's view of the world carries it.
+    """
+    lore: dict[str, str] = {}
+    page = store.get_wiki_subject("world", "world")
+    for spec in sorted(page.free_sections, key=lambda s: (s.order, s.key)):
+        if spec.kind == "log":
+            continue
+        value = current_value(store, "world", "world", spec.key)
+        if value and value.strip():
+            lore[spec.title] = value.strip()
+    return lore
 
 
 __all__ = [

@@ -97,6 +97,17 @@ On a fresh project the order is:
    by the model and cached, extended as the window slides). Settings you edited
    — character sheets, wiki sections, faction descriptions — are given as their
    latest version only; what they said before is not.
+
+   Outlines and plans grow the work. Whenever an outline is saved (added,
+   edited, imported, re-outlined) or a plan is drafted or saved, it is read
+   once for the settings it brings in, and those are registered straight away:
+   new characters in the workshop, places and rules in the world builder,
+   factions and world facts in the wiki, and a change of direction on the
+   work's page and in 작품기획 — you are told what was added. The planners and
+   the Director may introduce new people, places and details for that reason,
+   and the Director can cast a newcomer in the very plan that introduces them.
+   What *happens* in an outline (a death, two people falling in love) is not
+   registered; it becomes history when that episode is written.
 5. When the chapter is done you are shown **what it recorded** about the cast and
    the world. Only what you accept reaches the next chapter.
 6. **📖 위키** — every setting, and the history of how it got that way. Anything
@@ -186,7 +197,7 @@ Generation reports real progress, driven by the pipeline itself:
 ## Command line
 
 ```bash
-pytest                                        # 950 tests, no API key and no network (enforced, not assumed)
+pytest                                        # 970 tests, no API key and no network (enforced, not assumed)
 python -m storyweaver.smoke_test              # is the model binding working?
 python -m storyweaver.demo_scene --two        # one scene, printed
 python -m storyweaver.demo_episode --memory   # one episode, with continuity

@@ -15,10 +15,16 @@ from storyweaver.agents import history
 from storyweaver.agents import next_episode
 from storyweaver.agents.flow import episode_flow
 from storyweaver.agents.concept import reply_text
+from storyweaver.agents.settings_extract import (
+    ExtractedSettings,
+    NewCharacter,
+    NewPlace,
+    plan_text,
+)
 from storyweaver.llm import get_llm
 from storyweaver.models import Episode, Scene, StoryBeat
 from storyweaver.models.style import PACING, PROSE_DENSITIES
-from storyweaver.api import deps
+from storyweaver.api import deps, registration
 from storyweaver.ui.project import Project
 from storyweaver.models.structure import describe_position, describe_range
 from storyweaver.wiki import STORY_SUBJECT_ID, story_brief
@@ -171,9 +177,11 @@ Expand it into a detailed episode outline (4-6 paragraphs) that:
 Do NOT write prose fiction; this is a planning document, not a chapter. Write
 it in the language the author used, in clear and concise sentences.
 
-Do not invent characters or contradict the world and the cast below. Where the
-author's line is thin, develop it in the direction the story is already going
-rather than introducing something new. Where the work's overall direction is
+Do not contradict the world and the cast below. Where the author's line is
+thin, develop it in the direction the story is already going; you may bring in
+a new character, place or detail when it makes the episode better — name it
+and say who or what it is, since it will be registered in the work's
+settings. Where the work's overall direction is
 given below, aim this episode at it — do not have anyone act on knowledge of
 the ending, and do not bring it forward.
 
@@ -273,6 +281,40 @@ def add_many_episodes(body: AddManyRequest) -> list[Episode]:
                 source="author", section_kind="log",
             )
     return added
+
+
+class ExtractSettingsRequest(BaseModel):
+    episode_numbers: list[int] = Field(min_length=1, max_length=next_episode.MAX_BATCH * 5)
+
+
+class ExtractSettingsResponse(BaseModel):
+    registered: list[str] = Field(default_factory=list)
+
+
+@router.post("/extract-settings", response_model=ExtractSettingsResponse)
+def extract_settings(body: ExtractSettingsRequest) -> ExtractSettingsResponse:
+    """Register what these episodes' outlines bring in that the work lacks.
+
+    Called by the studio after outlines are saved — added, edited, imported.
+    New characters go to the workshop, places and rules to the world builder,
+    factions and world facts to the wiki, a change of direction to the work's
+    page and 작품기획. Outlines already read are skipped, so this costs one
+    model call at most, and none when nothing changed.
+    """
+    project = deps.get_project()
+    texts = []
+    for number in sorted(set(body.episode_numbers)):
+        episode = project.get_episode(number)
+        if episode is not None and episode.author_storyline.strip():
+            texts.append((number, "개요", episode.author_storyline))
+    try:
+        registered = registration.register_from(texts)
+    except Exception as error:  # noqa: BLE001 — reported to the author
+        logger.exception("Reading outlines for settings failed")
+        raise HTTPException(
+            status_code=502, detail=f"개요에서 새 설정을 읽지 못했습니다: {error}"
+        ) from error
+    return ExtractSettingsResponse(registered=registered)
 
 
 class DraftBatchRequest(BaseModel):
@@ -749,7 +791,7 @@ def draft_plan(episode_number: int) -> dict:
     brief = "\n\n".join(part for part in (brief, record) if part)
 
     try:
-        scenes = director.decompose_episode(
+        drawn = director.plan_episode(
             episode,
             folded.world,
             folded.character_map(),
@@ -764,11 +806,36 @@ def draft_plan(episode_number: int) -> dict:
             status_code=502, detail=f"The Director failed: {error}"
         ) from error
 
-    if not scenes:
+    if not drawn.scenes:
         raise HTTPException(
             status_code=502,
             detail="The Director produced no usable scenes. Try again, or name the "
             "characters in the outline the way they are spelled in the cast.",
+        )
+
+    # Anyone and anywhere new the Director brought in joins the work before
+    # the plan that uses them is saved.
+    registered: list[str] = []
+    scenes = drawn.scenes
+    if drawn.new_characters or drawn.new_locations:
+        done = registration.register_found(
+            ExtractedSettings(
+                new_characters=[
+                    NewCharacter(**n.model_dump(exclude={"id"})) for n in drawn.new_characters
+                ],
+                new_locations=[
+                    NewPlace(**p.model_dump(exclude={"id"})) for p in drawn.new_locations
+                ],
+            ),
+            f"{episode_number}화 기획서",
+            preset_character_ids={n.name.strip(): n.id for n in drawn.new_characters},
+            preset_location_ids={p.name.strip(): p.id for p in drawn.new_locations},
+        )
+        registered += done.lines
+        scenes = _renamed(
+            scenes,
+            {n.id: done.character_ids.get(n.name.strip(), n.id) for n in drawn.new_characters},
+            {p.id: done.location_ids.get(p.name.strip(), p.id) for p in drawn.new_locations},
         )
 
     with deps.write_lock():
@@ -777,7 +844,43 @@ def draft_plan(episode_number: int) -> dict:
         planned = latest.model_copy(update={"scenes": scenes, "status": "planned"})
         current.update_episode(planned)
         deps.save_project(current)
-    return _plan_response(current, planned)
+    return {**_plan_response(current, planned), **_register_plan(planned, registered)}
+
+
+def _renamed(scenes: list[Scene], people: dict[str, str], places: dict[str, str]) -> list[Scene]:
+    """A plan with provisional ids swapped for the ones the newcomers got."""
+    if all(k == v for k, v in people.items()) and all(k == v for k, v in places.items()):
+        return scenes
+    renamed = []
+    for scene in scenes:
+        beats = [
+            beat.model_copy(update={
+                "involved_character_ids": [people.get(c, c) for c in beat.involved_character_ids],
+                "location_id": places.get(beat.location_id, beat.location_id),
+            })
+            for beat in scene.beats
+        ]
+        renamed.append(scene.model_copy(update={
+            "participating_character_ids": [
+                people.get(c, c) for c in scene.participating_character_ids
+            ],
+            "location_id": places.get(scene.location_id, scene.location_id),
+            "beats": beats,
+        }))
+    return renamed
+
+
+def _register_plan(episode: Episode, already: list[str] | None = None) -> dict:
+    """Read a saved plan for new settings. A failure here never loses the plan."""
+    registered = list(already or [])
+    try:
+        registered += registration.register_from(
+            [(episode.episode_number, "기획서", plan_text(episode))]
+        )
+    except Exception as error:  # noqa: BLE001 — the plan is saved either way
+        logger.exception("Reading episode %d's plan for settings failed", episode.episode_number)
+        return {"registered": registered, "registration_error": str(error)}
+    return {"registered": registered}
 
 
 @router.get("/{episode_number}/plan")
@@ -832,4 +935,4 @@ def update_plan(episode_number: int, update: PlanUpdate) -> dict:
         edited = latest.model_copy(update={"scenes": scenes, "status": "planned"})
         current.update_episode(edited)
         deps.save_project(current)
-    return _plan_response(current, edited)
+    return {**_plan_response(current, edited), **_register_plan(edited)}

@@ -72,9 +72,13 @@ other move, not only their relationship with the protagonist. Use what the cast
 list says each of them wants and hides. Rotate focus; a stretch of twenty
 episodes where most of the cast never appears has wasted it.
 
-**Stay inside what exists.** Use the cast and the world as written above. Do
-not introduce a new major character or break a rule. A minor new face or a new
-place is fine when an episode needs one.
+**Build on what exists, and add when it is better.** Use the cast and the world
+as written above, and keep to the rules as they stand. You may also bring in
+something the plan did not have — a new character, even an important one; a
+place, a faction, a detail of the world or of someone's past; a turn in where
+the story is going — whenever it makes the story more interesting. Whatever
+you add is registered in the work's settings, so introduce it clearly: name
+it, and say in a phrase who or what it is.
 
 **The author's direction wins.** If the author said what they want from these
 episodes, that is what they are about — fit everything else around it.

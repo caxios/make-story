@@ -30,3 +30,6 @@ where = ["backend"]
 [tool.pytest.ini_options]
 pythonpath = ["backend"]
 testpaths = ["tests"]
+markers = [
+    "real_extract: run the real settings extraction (with a stubbed model) instead of the autouse no-op",
+]

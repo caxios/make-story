@@ -331,3 +331,21 @@ def _no_live_model_calls(monkeypatch):
 
     llm.build_model.cache_clear()
     monkeypatch.setattr(llm, "build_model", refuse)
+
+
+@pytest.fixture(autouse=True)
+def _outlines_bring_in_nothing(request, monkeypatch):
+    """Saving an outline or a plan reads it for new settings — a model call.
+
+    Tests that are not about that get an extraction that finds nothing, so a
+    plan test does not trip the live-model guard and wait out its retries. A
+    test about extraction opts out with `@pytest.mark.real_extract` and stubs
+    the model itself.
+    """
+    if request.node.get_closest_marker("real_extract"):
+        return
+    from storyweaver.agents import settings_extract
+
+    monkeypatch.setattr(
+        settings_extract, "extract", lambda *args, **kwargs: settings_extract.ExtractedSettings()
+    )

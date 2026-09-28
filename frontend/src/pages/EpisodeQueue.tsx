@@ -46,6 +46,7 @@ import {
   TextField,
 } from '@/components/ui'
 import { cn, formatCount } from '@/lib/cn'
+import { useSettingsRegistration } from '@/lib/useSettingsRegistration'
 import { useProject } from '@/state/ProjectContext'
 import type { Episode, EpisodePlan, Pacing, PendingGeneration } from '@/types/storyweaver'
 
@@ -60,6 +61,7 @@ const words = (text: string) => text.split(/\s+/).filter(Boolean).length
 export function EpisodeQueue() {
   const { project, loading, refresh } = useProject()
   const { success, fromError } = useToast()
+  const { announce } = useSettingsRegistration()
   const navigate = useNavigate()
   const generation = useGenerationStream()
 
@@ -219,6 +221,8 @@ export function EpisodeQueue() {
       setPlan(drafted)
       setReviewing(episode)
       await refresh()
+      // 디렉터가 들인 새 인물·장소, 기획서에서 새로 생긴 설정.
+      void announce(drafted.registered, drafted.registration_error)
     } catch (cause) {
       fromError(cause, '기획서를 만들지 못했습니다.')
     } finally {
@@ -772,6 +776,7 @@ function AddEpisodeModal({
   onAdded: () => Promise<void>
 }) {
   const { success, fromError } = useToast()
+  const { registerFrom } = useSettingsRegistration()
   const [mode, setMode] = useState<AddMode>('batch')
 
   // --- 한 번에 여러 화 -------------------------------------------------------
@@ -823,11 +828,15 @@ function AddEpisodeModal({
     const chosen = drafts.filter((d) => kept.has(d.episode_number) && d.author_storyline.trim())
     setSaving(true)
     try {
-      await api.addEpisodes(chosen.map((d) => ({ author_storyline: d.author_storyline.trim() })))
+      const added = await api.addEpisodes(
+        chosen.map((d) => ({ author_storyline: d.author_storyline.trim() })),
+      )
       await onAdded()
       success(`${chosen.length}개 회차가 큐에 등록되었습니다`)
       reset()
       onClose()
+      // 개요에 새로 나온 인물·장소·설정을 작품에 등록한다. 창은 먼저 닫는다.
+      void registerFrom(added.map((e) => e.episode_number))
     } catch (cause) {
       fromError(cause, '회차를 등록하지 못했습니다.')
     } finally {
@@ -838,11 +847,12 @@ function AddEpisodeModal({
   const addSingle = async () => {
     setSaving(true)
     try {
-      await api.addEpisode(storyline.trim(), title.trim(), pacing)
+      const added = await api.addEpisode(storyline.trim(), title.trim(), pacing)
       await onAdded()
       success(`제${nextNumber}화가 큐에 등록되었습니다`)
       reset()
       onClose()
+      void registerFrom([added.episode_number])
     } catch (cause) {
       fromError(cause, '회차를 등록하지 못했습니다.')
     } finally {
@@ -1030,6 +1040,7 @@ function EditEpisodeModal({
   onSaved: () => Promise<void>
 }) {
   const { success, fromError } = useToast()
+  const { registerFrom } = useSettingsRegistration()
   const [draft, setDraft] = useState({ title: '', storyline: '', pacing: 'normal' as Pacing })
   const [saving, setSaving] = useState(false)
 
@@ -1058,6 +1069,7 @@ function EditEpisodeModal({
       await onSaved()
       success('개요가 저장되었습니다')
       onClose()
+      if (storylineChanged) void registerFrom([episode.episode_number])
     } catch (cause) {
       fromError(cause, '회차를 저장하지 못했습니다.')
     } finally {
@@ -1120,6 +1132,7 @@ function BatchAddModal({
   onAdded: () => Promise<void>
 }) {
   const { success, fromError } = useToast()
+  const { registerFrom } = useSettingsRegistration()
   const [text, setText] = useState('')
   const [separator, setSeparator] = useState('---')
   const [saving, setSaving] = useState(false)
@@ -1137,6 +1150,7 @@ function BatchAddModal({
       success(`${added.length}개 회차가 큐에 등록되었습니다`)
       setText('')
       onClose()
+      void registerFrom(added.map((e) => e.episode_number))
     } catch (cause) {
       fromError(cause, '개요 목록을 가져오지 못했습니다.')
     } finally {

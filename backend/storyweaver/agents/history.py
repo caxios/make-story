@@ -145,7 +145,9 @@ def gather(
             if described and described.strip():
                 record.setting.append(f"설명: {described.strip()}")
         for spec in sorted(page.free_sections, key=lambda s: (s.order, s.key)):
-            if spec.kind == "log":
+            # The world's own sections are already part of the world every
+            # planner is shown (`fold_world` puts them in `additional_lore`).
+            if spec.kind == "log" or subject_type == "world":
                 continue
             value = current_value(store, subject_type, subject_id, spec.key)  # type: ignore[arg-type]
             if value and value.strip():

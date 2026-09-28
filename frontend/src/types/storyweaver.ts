@@ -438,6 +438,10 @@ export interface EpisodePlan {
   /** What a Korean web-novel 회차 normally runs to, for comparison. */
   standard_low: number
   standard_high: number
+  /** 저장한 기획서에서 새로 등록된 설정 (인물·장소·세력·규칙·세계 설정·작품 방향). */
+  registered?: string[]
+  /** 기획서는 저장됐지만 새 설정을 읽지 못했을 때의 이유. */
+  registration_error?: string
 }
 
 export interface PendingGeneration {

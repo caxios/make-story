@@ -456,11 +456,11 @@ def test_the_director_is_told_the_episodes_position(client, loaded, project_stor
     _with_structure(project_store)
     seen = {}
 
-    def decompose_episode(episode, world, characters, **kwargs):
+    def plan_episode(episode, world, characters, **kwargs):
         seen["brief"] = kwargs.get("story_brief", "")
         raise RuntimeError("stop here")
 
-    monkeypatch.setattr(episodes_api.director, "decompose_episode", decompose_episode)
+    monkeypatch.setattr(episodes_api.director, "plan_episode", plan_episode)
 
     client.post("/api/episodes/4/plan")
 

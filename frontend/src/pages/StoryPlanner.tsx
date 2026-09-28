@@ -24,6 +24,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import * as api from '@/api/client'
+import { useSettingsRegistration } from '@/lib/useSettingsRegistration'
 import type { ExpandedEpisodeSummary } from '@/api/client'
 import { useToast } from '@/components/ToastContext'
 import {
@@ -45,6 +46,7 @@ const MAX_SUMMARIES = 20
 export function StoryPlanner() {
   const { project, refresh } = useProject()
   const { success, error, fromError } = useToast()
+  const { registerFrom } = useSettingsRegistration()
   const navigate = useNavigate()
 
   // 1단계: 작가가 적은 한 줄들.
@@ -123,12 +125,14 @@ export function StoryPlanner() {
 
     setSaving(true)
     const saved: number[] = []
+    const savedNumbers: number[] = []
     const failures: string[] = []
     try {
       for (const index of order) {
         try {
-          await api.addEpisode(storylines[index].trim(), titles[index].trim())
+          const added = await api.addEpisode(storylines[index].trim(), titles[index].trim())
           saved.push(index)
+          savedNumbers.push(added.episode_number)
         } catch (cause) {
           const reason = cause instanceof Error ? cause.message : String(cause)
           failures.push(plans[index].episode_number + '화: ' + reason)
@@ -136,6 +140,8 @@ export function StoryPlanner() {
       }
 
       await refresh()
+      // 저장한 개요들에서 새로 생긴 설정을 한 번에 읽어 등록한다.
+      void registerFrom(savedNumbers)
 
       if (saved.length > 0) {
         success(saved.length + '개 에피소드를 큐에 추가했습니다.')

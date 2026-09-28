@@ -62,10 +62,11 @@ def three_scenes(monkeypatch, loaded):
             plan(episode, world, characters), world, director.context.as_character_map(characters)
         )
 
-    monkeypatch.setattr(director, "decompose_episode", decompose)
-    from storyweaver.api import episodes as episodes_api
+    def plan_episode(episode, world, characters, llm=None, **kwargs):
+        return director.DirectorPlan(scenes=decompose(episode, world, characters))
 
-    monkeypatch.setattr(episodes_api.director, "decompose_episode", decompose)
+    monkeypatch.setattr(director, "decompose_episode", decompose)
+    monkeypatch.setattr(director, "plan_episode", plan_episode)
     return cast
 
 
@@ -121,7 +122,9 @@ def test_a_director_that_returns_nothing_is_reported_not_saved(
     """Episode 5 was planned as a single scene; silence is worse than that."""
     from storyweaver.api import episodes as episodes_api
 
-    monkeypatch.setattr(episodes_api.director, "decompose_episode", lambda *a, **k: [])
+    monkeypatch.setattr(
+        episodes_api.director, "plan_episode", lambda *a, **k: director.DirectorPlan(scenes=[])
+    )
 
     response = client.post("/api/episodes/2/plan")
 

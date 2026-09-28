@@ -65,9 +65,13 @@ planned for later are not answered now — they may be reminded of, or deepened.
 Otherwise pick up one or two of the open threads, especially one that has gone
 quiet for a while. Do not try to touch all of them.
 
-**Stay inside what exists.** Use the cast and the world as written above. Do
-not introduce a new major character or rewrite a rule. A minor new face or a
-new place is fine when the episode needs one.
+**Build on what exists, and add when it is better.** Use the cast and the world
+as written above, and keep to the rules as they stand. You may also bring in
+something the plan did not have — a new character, even an important one; a
+place, a faction, a detail of the world or of someone's past; a turn in where
+the story is going — whenever it makes the story more interesting. Whatever
+you add is registered in the work's settings, so introduce it clearly: name
+it, and say in a phrase who or what it is.
 
 **The author's direction wins.** If the author said what they want from this
 episode, that is what it is about — fit everything else around it. If they said
