@@ -84,6 +84,12 @@ On a fresh project the order is:
    threads, optionally steered by a line of your own. You tick and edit the
    ones you keep before they are queued.
 
+   To rework particular episodes, tick them in the queue and choose **AI로
+   개요 고치기**: only those outlines are rewritten (optionally to a direction
+   you give), fitted between the episodes you did not tick, and shown next to
+   the originals so you keep the ones you want. Written episodes cannot be
+   re-outlined.
+
    Every agent that writes a chapter — Director, characters, continuity
    checker, Writer — sees the two episodes before it and the three planned
    after it, marked as plans, so a chapter neither contradicts the last one nor
@@ -197,7 +203,7 @@ Generation reports real progress, driven by the pipeline itself:
 ## Command line
 
 ```bash
-pytest                                        # 970 tests, no API key and no network (enforced, not assumed)
+pytest                                        # 977 tests, no API key and no network (enforced, not assumed)
 python -m storyweaver.smoke_test              # is the model binding working?
 python -m storyweaver.demo_scene --two        # one scene, printed
 python -m storyweaver.demo_episode --memory   # one episode, with continuity

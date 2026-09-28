@@ -244,3 +244,103 @@ def draft_batch(
     if missing:
         logger.warning("The batch came back without episodes %s", missing)
     return outlines
+
+
+# ---------------------------------------------------------------------------
+# Revising chosen outlines
+# ---------------------------------------------------------------------------
+
+# Episodes one revision may touch: the same stretch the model can hold as one
+# run when drafting.
+MAX_REVISE = MAX_BATCH
+# Episodes this close to one being revised are shown in full, so the revision
+# follows on from them and hands over to them cleanly.
+NEIGHBOURHOOD = 3
+NO_REVISION_DIRECTION = (
+    "(따로 없습니다. 앞뒤 회차와 작품 구조에 더 잘 맞고, 더 재미있게 다듬으세요.)"
+)
+
+
+def format_queue_for_revision(project: Project, targets: set[int]) -> str:
+    """The whole queue, with the episodes to revise marked and shown whole."""
+    if not project.episodes:
+        return NO_EPISODES
+    lines = []
+    for episode in project.episodes:
+        number = episode.episode_number
+        written = episode.status == "completed" and episode.summary.strip()
+        if number in targets:
+            mark, gist = "TO REVISE — current outline", episode.author_storyline.strip()
+        elif written:
+            mark, gist = "written — what actually happened", episode.summary.strip()
+        else:
+            mark, gist = "planned — stays as it is", episode.author_storyline.strip()
+        if not gist and number not in targets:
+            continue
+        if not any(abs(number - t) <= NEIGHBOURHOOD for t in targets):
+            gist = _cut(gist, OLDER_LIMIT)
+        lines.append(f"Episode {number} ({mark}): {gist or '(비어 있음)'}")
+    return "\n\n".join(lines)
+
+
+def build_revise_prompt(
+    project: Project,
+    targets: Sequence[int],
+    *,
+    brief: str = "",
+    threads: Sequence[PlotThread] = (),
+    direction: str = "",
+    range_text: str = "",
+    record: str = "",
+) -> str:
+    chosen = sorted(set(targets))
+    return render_prompt(
+        "revise_outlines",
+        title=project.world.title or project.name,
+        numbers=", ".join(f"{n}화" for n in chosen),
+        brief=brief.strip() or NO_BRIEF,
+        range=range_text.strip() or NO_RANGE,
+        cast=ctx.format_cast_for_planning(project.characters),
+        world=ctx.format_world_for_planning(project.world),
+        record=record.strip() or NO_RECORD,
+        queue=format_queue_for_revision(project, set(chosen)),
+        threads=format_threads(threads, chosen[0]),
+        direction=direction.strip() or NO_REVISION_DIRECTION,
+    )
+
+
+def revise(
+    project: Project,
+    targets: Sequence[int],
+    *,
+    brief: str = "",
+    threads: Sequence[PlotThread] = (),
+    direction: str = "",
+    range_text: str = "",
+    record: str = "",
+    llm=None,
+) -> list[tuple[int, str]]:
+    """New outlines for the chosen episodes only. One call; nothing is saved.
+
+    Returns `(episode_number, outline)` for the chosen numbers the model
+    answered, in order.
+    """
+    chosen = sorted(set(targets))
+    if not 1 <= len(chosen) <= MAX_REVISE:
+        raise ValueError(f"a revision is 1 to {MAX_REVISE} episodes")
+    prompt = build_revise_prompt(
+        project, chosen, brief=brief, threads=threads, direction=direction,
+        range_text=range_text, record=record,
+    )
+    model = telemetry.meter(
+        llm or get_llm(stage="planner", max_output_tokens=MODEL_MAX_OUTPUT_TOKENS), "planner"
+    )
+    result: DraftedBatch = model.with_structured_output(DraftedBatch).invoke(prompt)
+    drawn = {e.number: e.outline.strip() for e in result.episodes if e.outline.strip()}
+    revised = [(n, drawn[n]) for n in chosen if n in drawn]
+    if not revised:
+        raise ValueError("The planner returned no revised outlines")
+    missing = [n for n in chosen if n not in drawn]
+    if missing:
+        logger.warning("The revision came back without episodes %s", missing)
+    return revised

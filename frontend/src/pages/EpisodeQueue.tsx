@@ -100,6 +100,12 @@ export function EpisodeQueue() {
     () => [...(project?.episodes ?? [])].sort((a, b) => a.episode_number - b.episode_number),
     [project],
   )
+  // 고른 회차 중 AI가 개요를 고칠 수 있는 것. 이미 쓴 회차의 개요는 기록이다.
+  const [revising, setRevising] = useState(false)
+  const revisable = episodes
+    .filter((e) => selected.has(e.episode_number))
+    .filter((e) => e.status !== 'completed' && e.status !== 'in_progress')
+    .map((e) => e.episode_number)
 
   const loadPending = useCallback(() => {
     void api
@@ -327,6 +333,22 @@ export function EpisodeQueue() {
                 </Button>
                 <Button
                   size="sm"
+                  icon={Sparkles}
+                  disabled={busy || revisable.length === 0}
+                  title={
+                    revisable.length < selected.size
+                      ? '이미 썼거나 쓰는 중인 회차는 빼고 고칩니다'
+                      : undefined
+                  }
+                  onClick={() => setRevising(true)}
+                >
+                  AI로 개요 고치기
+                  {revisable.length > 0 && revisable.length < selected.size
+                    ? ` (${revisable.length}개)`
+                    : ''}
+                </Button>
+                <Button
+                  size="sm"
                   variant="danger"
                   icon={Trash2}
                   disabled={busy}
@@ -450,6 +472,17 @@ export function EpisodeQueue() {
       />
 
       <BatchAddModal open={batching} onClose={() => setBatching(false)} onAdded={refresh} />
+
+      <ReviseOutlinesModal
+        open={revising}
+        numbers={revisable}
+        episodes={episodes}
+        onClose={() => setRevising(false)}
+        onSaved={async () => {
+          setSelected(new Set())
+          await refresh()
+        }}
+      />
 
       <EditEpisodeModal
         episode={editing}
@@ -1116,6 +1149,198 @@ function EditEpisodeModal({
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
             개요를 변경하면 이 회차의 기존 진행 체크포인트가 초기화됩니다 — 이전 개요를 기반으로 작성된 장면들과 충돌을 방지하기 위함입니다.
           </p>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * 고른 회차의 개요를 AI가 다시 쓴다. 원래 개요와 새 개요를 나란히 보고, 체크한
+ * 것만 (고쳐서) 저장한다. 기획서가 있던 회차는 개요가 바뀌면 큐로 돌아간다.
+ */
+function ReviseOutlinesModal({
+  open,
+  numbers,
+  episodes,
+  onClose,
+  onSaved,
+}: {
+  open: boolean
+  numbers: number[]
+  episodes: Episode[]
+  onClose: () => void
+  onSaved: () => Promise<void>
+}) {
+  const { success, fromError } = useToast()
+  const { registerFrom } = useSettingsRegistration()
+  const [direction, setDirection] = useState('')
+  const [revised, setRevised] = useState<api.RevisedOutline[]>([])
+  const [kept, setKept] = useState<Set<number>>(new Set())
+  const [drafting, setDrafting] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // 다른 회차를 골라 다시 열면 지난 결과는 버린다.
+  const key = numbers.join(',')
+  useEffect(() => {
+    setRevised([])
+    setKept(new Set())
+  }, [key])
+
+  const close = () => {
+    setDirection('')
+    setRevised([])
+    setKept(new Set())
+    onClose()
+  }
+
+  const draft = async () => {
+    setDrafting(true)
+    try {
+      const result = await api.reviseOutlines(numbers, direction.trim())
+      setRevised(result.episodes)
+      setKept(new Set(result.episodes.map((e) => e.episode_number)))
+      const missing = numbers.length - result.episodes.length
+      success(
+        missing > 0
+          ? `${result.episodes.length}개 회차를 고쳤습니다 (${missing}개는 비어서 왔습니다).`
+          : `${result.episodes.length}개 회차를 고쳤습니다. 비교해 보시고 저장할 것을 고르세요.`,
+      )
+    } catch (cause) {
+      fromError(cause, '개요를 고치지 못했습니다.')
+    } finally {
+      setDrafting(false)
+    }
+  }
+
+  const save = async () => {
+    const chosen = revised.filter((r) => kept.has(r.episode_number) && r.after.trim())
+    setSaving(true)
+    const saved: number[] = []
+    try {
+      for (const outline of chosen) {
+        await api.updateEpisode(outline.episode_number, { author_storyline: outline.after.trim() })
+        saved.push(outline.episode_number)
+      }
+      success(`${saved.length}개 회차의 개요를 바꿨습니다`)
+      close()
+    } catch (cause) {
+      fromError(cause, `개요를 저장하지 못했습니다 (${saved.length}개는 저장됨).`)
+    } finally {
+      setSaving(false)
+      if (saved.length > 0) {
+        await onSaved()
+        // 새 개요에 나온 인물·장소·설정을 작품에 등록한다.
+        void registerFrom(saved)
+      }
+    }
+  }
+
+  const keptCount = revised.filter((r) => kept.has(r.episode_number)).length
+  const planned = episodes
+    .filter((e) => numbers.includes(e.episode_number) && e.status === 'planned')
+    .map((e) => e.episode_number)
+
+  return (
+    <Modal
+      open={open}
+      onClose={close}
+      wide
+      title={`AI로 개요 고치기 · ${numbers.map((n) => `${n}화`).join(', ')}`}
+      description="고른 회차만 다시 씁니다. 앞뒤 회차, 작품 구조, 위키와 작중 기록을 보고 고르지 않은 회차와 이어지게 씁니다."
+      footer={
+        <>
+          <Button onClick={close}>취소</Button>
+          <Button
+            variant="primary"
+            onClick={() => void save()}
+            loading={saving}
+            disabled={keptCount === 0 || drafting}
+          >
+            {keptCount > 0 ? `${keptCount}개 저장` : '저장'}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="rounded-lg border border-line p-3">
+          <TextArea
+            label="원하는 방향 (선택)"
+            rows={2}
+            value={direction}
+            onChange={(event) => setDirection(event.target.value)}
+            placeholder="예: 12화에 강소희를 처음 등장시키고, 13화는 둘의 신경전으로 / 비워 두면 흐름과 구조에 맞게 다듬습니다"
+          />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-ink-muted">
+              {numbers.length}개 회차를 모델 한 번 호출로 고칩니다.
+              {planned.length > 0 &&
+                ` ${planned.map((n) => `${n}화`).join(', ')}는 기획서가 있어서, 저장하면 기획서가 풀리고 큐로 돌아갑니다.`}
+            </p>
+            <Button
+              icon={Sparkles}
+              loading={drafting}
+              disabled={drafting || saving || numbers.length === 0}
+              onClick={() => void draft()}
+            >
+              {revised.length > 0 ? '다시 고치기' : '개요 고치기'}
+            </Button>
+          </div>
+        </div>
+
+        {revised.length > 0 && (
+          <ul className="max-h-[30rem] space-y-3 overflow-y-auto pr-1">
+            {revised.map((outline, index) => {
+              const on = kept.has(outline.episode_number)
+              return (
+                <li
+                  key={outline.episode_number}
+                  className={cn('rounded-lg border border-line p-3', !on && 'opacity-50')}
+                >
+                  <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-ink">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-accent"
+                      checked={on}
+                      onChange={() =>
+                        setKept((current) => {
+                          const next = new Set(current)
+                          if (next.has(outline.episode_number)) next.delete(outline.episode_number)
+                          else next.add(outline.episode_number)
+                          return next
+                        })
+                      }
+                    />
+                    {outline.episode_number}화
+                  </label>
+                  <div className="mt-2 grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="mb-1 text-xs text-ink-muted">원래 개요</p>
+                      <p className="whitespace-pre-line text-sm leading-relaxed text-ink-dim">
+                        {outline.before}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-xs text-ink-muted">새 개요 (고칠 수 있습니다)</p>
+                      <textarea
+                        className="sw-field w-full text-sm"
+                        rows={5}
+                        value={outline.after}
+                        disabled={!on}
+                        onChange={(event) =>
+                          setRevised((current) =>
+                            current.map((r, i) =>
+                              i === index ? { ...r, after: event.target.value } : r,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
         )}
       </div>
     </Modal>

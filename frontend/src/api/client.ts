@@ -365,6 +365,22 @@ export const extractSettings = (episodeNumbers: number[]) =>
     body: { episode_numbers: episodeNumbers },
   })
 
+export interface RevisedOutline {
+  episode_number: number
+  before: string
+  after: string
+}
+
+/**
+ * 고른 회차의 개요만 AI가 다시 쓴다. 앞뒤 회차·작품 구조·위키를 보고 고르지
+ * 않은 회차와 이어지게. 저장은 하지 않는다 — 작가가 비교하고 고른 것만 저장한다.
+ */
+export const reviseOutlines = (episodeNumbers: number[], direction: string) =>
+  request<{ episodes: RevisedOutline[] }>('/api/episodes/revise-outlines', {
+    method: 'POST',
+    body: { episode_numbers: episodeNumbers, direction },
+  })
+
 export const summarizeEpisode = (episodeNumber: number) =>
   request<Episode>(`/api/episodes/${episodeNumber}/summarize`, { method: 'POST' })
 

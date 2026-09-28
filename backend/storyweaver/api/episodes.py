@@ -317,6 +317,80 @@ def extract_settings(body: ExtractSettingsRequest) -> ExtractSettingsResponse:
     return ExtractSettingsResponse(registered=registered)
 
 
+class ReviseRequest(BaseModel):
+    episode_numbers: list[int] = Field(min_length=1, max_length=next_episode.MAX_REVISE)
+    direction: str = Field(default="", max_length=2000)
+
+
+class RevisedOutline(BaseModel):
+    episode_number: int
+    before: str
+    after: str
+
+
+class ReviseResponse(BaseModel):
+    episodes: list[RevisedOutline]
+
+
+@router.post("/revise-outlines", response_model=ReviseResponse)
+def revise_outlines(
+    body: ReviseRequest,
+    project: Project = Depends(deps.get_project),
+) -> ReviseResponse:
+    """Rewrite the outlines of the episodes the author chose, and only those.
+
+    One model call, shown the whole queue with the chosen ones marked, so each
+    revision fits between episodes that are not changing. Nothing is saved:
+    the author compares, edits and keeps what they want (`PUT /{n}` each).
+    A written chapter cannot be re-outlined here — its outline is history.
+    """
+    chosen = sorted(set(body.episode_numbers))
+    missing = [n for n in chosen if project.get_episode(n) is None]
+    if missing:
+        raise HTTPException(
+            status_code=404, detail="없는 회차입니다: " + ", ".join(f"{n}화" for n in missing)
+        )
+    locked = [
+        n for n in chosen
+        if project.get_episode(n).status in ("completed", "in_progress")
+    ]
+    if locked:
+        raise HTTPException(
+            status_code=409,
+            detail="이미 썼거나 쓰는 중인 회차는 개요를 고칠 수 없습니다: "
+            + ", ".join(f"{n}화" for n in locked),
+        )
+
+    memory = deps.get_memory()
+    folded = deps.folded_project(project)
+    try:
+        revised = next_episode.revise(
+            folded,
+            chosen,
+            brief=story_brief(memory.chronicle) if memory is not None else "",
+            threads=memory.get_active_plot_threads() if memory is not None else [],
+            direction=body.direction,
+            range_text=describe_range(project.structure, chosen[0], chosen[-1]),
+            record=_record(project, chosen[0]),
+        )
+    except Exception as error:  # noqa: BLE001 — reported to the author
+        logger.exception("Revising outlines %s failed", chosen)
+        raise HTTPException(
+            status_code=502, detail=f"개요를 고치지 못했습니다: {error}"
+        ) from error
+
+    return ReviseResponse(
+        episodes=[
+            RevisedOutline(
+                episode_number=number,
+                before=project.get_episode(number).author_storyline,
+                after=outline,
+            )
+            for number, outline in revised
+        ]
+    )
+
+
 class DraftBatchRequest(BaseModel):
     count: int = Field(default=next_episode.MAX_BATCH, ge=1, le=next_episode.MAX_BATCH)
     direction: str = Field(default="", max_length=2000)
