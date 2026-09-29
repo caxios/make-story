@@ -90,6 +90,14 @@ On a fresh project the order is:
    the originals so you keep the ones you want. Written episodes cannot be
    re-outlined.
 
+   To add an episode somewhere other than the end, hover between two cards
+   (or above the first) and choose **회차 넣기**. Write the outline yourself, or
+   have it drafted from the episode before and the one after — it picks up
+   where the first leaves off and ends where the second can begin, without
+   taking either one's events — along with the whole queue, the wiki and the
+   work's structure. The new episode takes that number and everything after it
+   moves down one, its wiki history and any half-written checkpoint with it.
+
    Every agent that writes a chapter — Director, characters, continuity
    checker, Writer — sees the two episodes before it and the three planned
    after it, marked as plans, so a chapter neither contradicts the last one nor
@@ -116,6 +124,14 @@ On a fresh project the order is:
    registered; it becomes history when that episode is written.
 5. When the chapter is done you are shown **what it recorded** about the cast and
    the world. Only what you accept reaches the next chapter.
+
+   A written chapter can be redone two ways (**다시 생성** in the queue, or the
+   rewrite button in the reading room): **본문만 다시 쓰기** keeps the plan it
+   was written to and writes the scenes again from the character agents on,
+   skipping the Director; **기획서부터 다시** has the Director lay it out anew,
+   for you to review before anything is written. The old prose stays until the
+   new chapter is saved. A kept plan that casts someone since deleted is
+   refused, so fix the plan or start from a new one.
 6. **📖 위키** — every setting, and the history of how it got that way. Anything
    can be deleted from here: one record, a section's contents, or a whole page.
 
@@ -203,7 +219,7 @@ Generation reports real progress, driven by the pipeline itself:
 ## Command line
 
 ```bash
-pytest                                        # 977 tests, no API key and no network (enforced, not assumed)
+pytest                                        # 992 tests, no API key and no network (enforced, not assumed)
 python -m storyweaver.smoke_test              # is the model binding working?
 python -m storyweaver.demo_scene --two        # one scene, printed
 python -m storyweaver.demo_episode --memory   # one episode, with continuity

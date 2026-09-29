@@ -22,7 +22,7 @@ import queue
 import threading
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query
 from sse_starlette.sse import EventSourceResponse
@@ -102,7 +102,7 @@ def running_generations() -> list[int]:
         return sorted(_running)
 
 
-def _check_startable(project: Project, episode_number: int) -> None:
+def _check_startable(project: Project, episode_number: int, keep_plan: bool = False) -> None:
     """Everything that would stop a generation from starting, as an HTTP error.
 
     Shared by the stream and by `/check`, so the two can never disagree about
@@ -117,12 +117,49 @@ def _check_startable(project: Project, episode_number: int) -> None:
         raise HTTPException(
             status_code=409, detail="This episode has no storyline to work from"
         )
+    if keep_plan:
+        _check_kept_plan(project, episode)
+
+
+def _check_kept_plan(project: Project, episode) -> None:
+    """A plan kept from the last run still has to fit the work as it is now.
+
+    Someone it casts may have been deleted since; the simulation would drop
+    them silently, and the rewritten chapter would be missing a person.
+    """
+    if not episode.scenes:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{episode.episode_number}화에는 남아 있는 기획서가 없습니다. "
+            "기획서부터 다시 만들어 주세요.",
+        )
+    cast = set(project.character_map())
+    places = {location.id for location in project.world.locations}
+    gone = sorted(
+        {cid for scene in episode.scenes for cid in scene.participating_character_ids} - cast
+    )
+    lost = sorted(
+        {scene.location_id for scene in episode.scenes if scene.location_id} - places
+    )
+    if gone or lost:
+        missing = ", ".join([*gone, *lost])
+        raise HTTPException(
+            status_code=409,
+            detail=f"기획서에 지금은 없는 인물·장소가 있습니다 ({missing}). "
+            "기획서를 고치거나 기획서부터 다시 만들어 주세요.",
+        )
+
+
+def _bare(scenes) -> list:
+    """The plan alone: what the last run wrote into its scenes is taken out."""
+    return [scene.model_copy(update={"interaction_log": [], "prose": ""}) for scene in scenes]
 
 
 @router.get("/check/{episode_number}")
 def check_generation(
     episode_number: int,
     max_turns: int = Query(default=12, ge=2, le=40),
+    keep_plan: Annotated[bool, Query()] = False,
 ) -> dict:
     """Would `/stream` start this episode? Answers without starting anything.
 
@@ -131,7 +168,7 @@ def check_generation(
     first, with an ordinary request, is how the author gets the real reason:
     the same validation, the same status codes, the same message.
     """
-    _check_startable(deps.get_project(), episode_number)
+    _check_startable(deps.get_project(), episode_number, keep_plan)
     with _running_lock:
         if episode_number in _running:
             raise HTTPException(
@@ -150,6 +187,7 @@ def check_generation(
 def stream_generation(
     episode_number: int,
     max_turns: int = Query(default=12, ge=2, le=40),
+    keep_plan: Annotated[bool, Query()] = False,
 ) -> EventSourceResponse:
     """Start generating one episode, and watch it.
 
@@ -158,9 +196,12 @@ def stream_generation(
     watch. Events, in order: "start", then "progress" after every pipeline node,
     then either "complete" with the saved chapter or "error" saying whether a
     checkpoint survived the failure.
+
+    `keep_plan` rewrites a finished chapter from the plan it was written to,
+    instead of having the Director lay it out again.
     """
     project = deps.get_project()
-    _check_startable(project, episode_number)
+    _check_startable(project, episode_number, keep_plan)
 
     with _running_lock:
         if episode_number in _running:
@@ -170,7 +211,7 @@ def stream_generation(
         _running.add(episode_number)
 
     try:
-        job = _start_job(project, episode_number, max_turns)
+        job = _start_job(project, episode_number, max_turns, keep_plan=keep_plan)
     except BaseException:
         with _running_lock:
             _running.discard(episode_number)
@@ -203,7 +244,9 @@ class _Job:
     thread: threading.Thread | None = None
 
 
-def _start_job(project: Project, episode_number: int, max_turns: int) -> _Job:
+def _start_job(
+    project: Project, episode_number: int, max_turns: int, *, keep_plan: bool = False
+) -> _Job:
     episode = deps.require_episode(project, episode_number)
     checkpoints = deps.get_checkpoints()
     memory = deps.get_memory()
@@ -213,10 +256,15 @@ def _start_job(project: Project, episode_number: int, max_turns: int) -> _Job:
     if episode.status == "completed":
         checkpoints.clear(episode_number)
 
-    # An approved plan is used as it stands. A checkpoint outranks it: that run
-    # is already past planning, and its scenes carry prose.
+    # An approved plan is used as it stands, and so is the plan a finished
+    # chapter was written to when the author asks to rewrite the prose only.
+    # Either way the scenes go in bare — a plan that comes back from a written
+    # chapter still carries that chapter's turns and prose. A checkpoint
+    # outranks both: that run is already past planning.
     approved_plan = (
-        list(episode.scenes) if episode.status == "planned" and episode.scenes else None
+        _bare(episode.scenes)
+        if episode.scenes and (keep_plan or episode.status == "planned")
+        else None
     )
 
     resumable = checkpoints.load(episode_number)

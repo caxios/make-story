@@ -344,3 +344,111 @@ def revise(
     if missing:
         logger.warning("The revision came back without episodes %s", missing)
     return revised
+
+
+# ---------------------------------------------------------------------------
+# Between two episodes
+# ---------------------------------------------------------------------------
+
+NO_BEFORE = "(없습니다. 이 회차가 작품의 첫 회차가 됩니다.)"
+NO_AFTER = "(없습니다. 이 회차가 큐의 마지막 회차가 됩니다.)"
+NO_INSERT_DIRECTION = (
+    "(따로 없습니다. 앞 회차에서 뒤 회차로 넘어가는 데 빠져 있는 것, 또는 그 사이에 "
+    "있으면 이야기가 더 좋아질 회차를 정하세요.)"
+)
+
+
+def _gist(episode) -> tuple[str, str]:
+    """What an episode is, and whether that is what happened or what is planned."""
+    if episode.status == "completed" and episode.summary.strip():
+        return "written — what actually happened", episode.summary.strip()
+    return "planned", episode.author_storyline.strip()
+
+
+def format_queue_for_insert(project: Project, at: int) -> str:
+    """The whole queue, with the gap the new episode goes into marked.
+
+    Numbers are given as they will be once it is in: episodes from `at` on
+    move down one. The episodes near the gap are shown whole.
+    """
+    lines = []
+    marked = False
+    for episode in project.episodes:
+        number = episode.episode_number
+        if number == at:
+            lines.append(f">>> Episode {at}: THE NEW EPISODE GOES HERE <<<")
+            marked = True
+        shown = number if number < at else number + 1
+        mark, gist = _gist(episode)
+        if not gist:
+            continue
+        if abs(number - at) > NEIGHBOURHOOD:
+            gist = _cut(gist, OLDER_LIMIT)
+        lines.append(f"Episode {shown} ({mark}): {gist}")
+    if not marked:
+        lines.append(f">>> Episode {at}: THE NEW EPISODE GOES HERE <<<")
+    return "\n\n".join(lines)
+
+
+def _neighbour(project: Project, number: int, missing: str) -> str:
+    episode = project.get_episode(number)
+    if episode is None:
+        return missing
+    mark, gist = _gist(episode)
+    return f"({mark}) {gist or '(개요가 비어 있습니다)'}"
+
+
+def build_insert_prompt(
+    project: Project,
+    at: int,
+    *,
+    brief: str = "",
+    threads: Sequence[PlotThread] = (),
+    direction: str = "",
+    position: str = "",
+    record: str = "",
+) -> str:
+    return render_prompt(
+        "insert_episode",
+        title=project.world.title or project.name,
+        number=at,
+        previous=at - 1,
+        following=at + 1,
+        brief=brief.strip() or NO_BRIEF,
+        position=position.strip() or NO_POSITION,
+        cast=ctx.format_cast_for_planning(project.characters),
+        world=ctx.format_world_for_planning(project.world),
+        record=record.strip() or NO_RECORD,
+        before=_neighbour(project, at - 1, NO_BEFORE),
+        after=_neighbour(project, at, NO_AFTER),
+        queue=format_queue_for_insert(project, at),
+        threads=format_threads(threads, at),
+        direction=direction.strip() or NO_INSERT_DIRECTION,
+    )
+
+
+def draft_between(
+    project: Project,
+    at: int,
+    *,
+    brief: str = "",
+    threads: Sequence[PlotThread] = (),
+    direction: str = "",
+    position: str = "",
+    record: str = "",
+    llm=None,
+) -> str:
+    """The outline for a new episode that will become episode `at`.
+
+    It goes between the episode now numbered `at - 1` and the one now numbered
+    `at`, and is written from both. One model call; nothing is saved.
+    """
+    prompt = build_insert_prompt(
+        project, at, brief=brief, threads=threads, direction=direction,
+        position=position, record=record,
+    )
+    model = telemetry.meter(llm or get_llm(stage="planner"), "planner")
+    outline = reply_text(model.invoke(prompt))
+    if not outline:
+        raise ValueError("The planner returned an empty outline")
+    return outline

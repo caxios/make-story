@@ -24,6 +24,7 @@ import { useNavigate } from 'react-router-dom'
 import * as api from '@/api/client'
 import { EpisodeSummary } from '@/components/EpisodeSummary'
 import { DEFAULT_READER, Prose, type ReaderSettings } from '@/components/Prose'
+import { RewriteChoice } from '@/components/RewriteChoice'
 import { useToast } from '@/components/ToastContext'
 import {
   Badge,
@@ -121,10 +122,16 @@ export function ReadingRoom() {
     }
   }
 
-  const requeue = async () => {
-    if (!episode) return
+  /**
+   * Back to the queue, either with the plan it was written to — waiting for
+   * review, so generating it rewrites the prose only — or with nothing, to be
+   * planned again.
+   */
+  const requeue = async (target: Episode, keepPlan: boolean) => {
     try {
-      await api.updateEpisode(episode.episode_number, { status: 'queued' })
+      await api.updateEpisode(target.episode_number, {
+        status: keepPlan ? 'planned' : 'queued',
+      })
       await refresh()
       navigate('/episodes')
     } catch (cause) {
@@ -410,19 +417,13 @@ export function ReadingRoom() {
         }
       />
 
-      <ConfirmDialog
-        open={regenerating}
+      <RewriteChoice
+        episode={regenerating ? episode : null}
         onClose={() => setRegenerating(false)}
-        onConfirm={() => void requeue()}
-        title={`제${episode.episode_number}화를 다시 생성하시겠습니까?`}
-        confirmLabel="대기열로 되돌리기"
-        destructive={false}
-        message={
-          <>
-            이 회차를 다시 에피소드 큐로 되돌리고 큐 화면으로 이동합니다. 기존에 작성된{' '}
-            {formatCount(count)} 단어의 본문은 실제로 재생성을 시작하기 전까지 디스크에 보존됩니다.
-          </>
-        }
+        onKeepPlan={() => void requeue(episode, true)}
+        onReplan={() => void requeue(episode, false)}
+        keepPlanNote="큐로 돌아가 '기획서 검토 대기'가 되고, 검토 화면에서 바로 집필할 수 있습니다."
+        replanNote="큐로 돌아가 '기획서 만들기'부터 다시 합니다."
       />
     </div>
   )

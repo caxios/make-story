@@ -566,6 +566,122 @@ def draft_next_episode(
     )
 
 
+class DraftInsertRequest(BaseModel):
+    at: int = Field(ge=1, description="The number the new episode will have.")
+    direction: str = Field(default="", max_length=2000)
+
+
+class DraftInsertResponse(BaseModel):
+    at: int
+    author_storyline: str
+
+
+def _check_insert_point(project: Project, at: int) -> None:
+    last = len(project.episodes) + 1
+    if not 1 <= at <= last:
+        raise HTTPException(
+            status_code=422, detail=f"회차는 1화부터 {last}화 자리까지 넣을 수 있습니다"
+        )
+
+
+@router.post("/draft-insert", response_model=DraftInsertResponse)
+def draft_insert(
+    body: DraftInsertRequest,
+    project: Project = Depends(deps.get_project),
+) -> DraftInsertResponse:
+    """Write the outline for a new episode that goes in as episode `at`.
+
+    It sits between the episodes now numbered `at - 1` and `at`, and is drawn
+    from both — it starts where the one before leaves off and ends where the
+    one after can begin — along with the whole queue, the wiki, the record,
+    the threads and where it sits in the work. One model call; nothing is
+    saved (`POST /insert` does that).
+    """
+    _check_insert_point(project, body.at)
+    if not project.characters:
+        raise HTTPException(status_code=409, detail="등장인물이 아직 없습니다")
+    if not project.world.overview.strip():
+        raise HTTPException(status_code=409, detail="세계관이 아직 없습니다")
+
+    memory = deps.get_memory()
+    folded = deps.folded_project(project)
+    try:
+        outline = next_episode.draft_between(
+            folded,
+            body.at,
+            brief=story_brief(memory.chronicle) if memory is not None else "",
+            threads=memory.get_active_plot_threads() if memory is not None else [],
+            direction=body.direction,
+            position=describe_position(project.structure, body.at),
+            record=_record(project, body.at),
+        )
+    except Exception as error:  # noqa: BLE001 — reported to the author
+        logger.exception("Drafting an episode to insert at %d failed", body.at)
+        raise HTTPException(
+            status_code=502, detail=f"{body.at}화에 넣을 개요를 쓰지 못했습니다: {error}"
+        ) from error
+    return DraftInsertResponse(at=body.at, author_storyline=outline)
+
+
+class InsertRequest(NewEpisode):
+    at: int = Field(ge=1, description="The number the new episode will have.")
+
+
+@router.post("/insert", response_model=list[Episode], status_code=201)
+def insert_episode(body: InsertRequest) -> list[Episode]:
+    """Put a new episode in as episode `at`; everything from `at` on moves down one.
+
+    The chronicle and any half-written checkpoints move with their chapters,
+    as they do when episodes are moved or deleted. Refused while a chapter that
+    would be renumbered is being written.
+    """
+    from storyweaver.api.generation import running_generations
+
+    _check_pacing(body.pacing)
+    busy = [n for n in running_generations() if n >= body.at]
+    if busy:
+        raise HTTPException(
+            status_code=409,
+            detail="집필 중인 회차의 번호가 바뀌게 되어 지금은 넣을 수 없습니다: "
+            + ", ".join(f"{n}화" for n in busy),
+        )
+
+    with deps.write_lock():
+        project = deps.get_project()
+        _check_insert_point(project, body.at)
+        total = len(project.episodes)
+        project.episodes.sort(key=lambda e: e.episode_number)
+        project.episodes.insert(
+            body.at - 1,
+            Episode(
+                episode_number=body.at,
+                title=body.title.strip(),
+                author_storyline=body.author_storyline.strip(),
+                pacing=body.pacing,
+            ),
+        )
+        project.renumber_episodes()
+        deps.save_project(project)
+        _follow_renumbering({n: n + 1 for n in range(body.at, total + 1)})
+        _shift_checkpoints(body.at, total)
+    return project.episodes
+
+
+def _shift_checkpoints(start: int, last: int) -> None:
+    """Move half-written chapters' checkpoints down one, from `start` on.
+
+    A checkpoint only resumes the episode whose number it carries, so left
+    where it was it would be offered to whichever chapter took that number.
+    """
+    checkpoints = deps.get_checkpoints()
+    for number in range(last, start - 1, -1):  # from the end, so none is overwritten
+        checkpoint = checkpoints.load(number)
+        if checkpoint is None:
+            continue
+        checkpoints.save(checkpoint.model_copy(update={"episode_number": number + 1}))
+        checkpoints.clear(number)
+
+
 def _record(project: Project, before: int) -> str:
     """What the story has done to each element before episode `before`.
 

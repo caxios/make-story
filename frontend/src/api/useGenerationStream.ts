@@ -72,8 +72,11 @@ const IDLE: GenerationState = {
 }
 
 export interface UseGenerationStream extends GenerationState {
-  /** Open the stream for one episode. Refuses while another run is live. */
-  begin: (episodeNumber: number, maxTurns?: number) => void
+  /**
+   * Open the stream for one episode. Refuses while another run is live.
+   * `keepPlan` rewrites a finished chapter to the plan it was written to.
+   */
+  begin: (episodeNumber: number, maxTurns?: number, keepPlan?: boolean) => void
   /** Stop watching. The backend keeps going and checkpoints what it finishes. */
   stop: () => void
   /** Clear the last result, ready for the next run. */
@@ -162,8 +165,8 @@ export function useGenerationStream(): UseGenerationStream {
   }, [close, cancelPending])
 
   const open = useCallback(
-    (episodeNumber: number, maxTurns: number) => {
-      const source = new EventSource(generationStreamUrl(episodeNumber, maxTurns))
+    (episodeNumber: number, maxTurns: number, keepPlan: boolean) => {
+      const source = new EventSource(generationStreamUrl(episodeNumber, maxTurns, keepPlan))
       sourceRef.current = source
 
       source.addEventListener('start', (event) => {
@@ -268,7 +271,7 @@ export function useGenerationStream(): UseGenerationStream {
   )
 
   const begin = useCallback(
-    (episodeNumber: number, maxTurns = 12) => {
+    (episodeNumber: number, maxTurns = 12, keepPlan = false) => {
       if (sourceRef.current || pendingRef.current) return
 
       const pending = { cancelled: false }
@@ -288,7 +291,7 @@ export function useGenerationStream(): UseGenerationStream {
         const deadline = Date.now() + BOOT_WAIT_MS
         for (;;) {
           try {
-            await checkGeneration(episodeNumber, maxTurns)
+            await checkGeneration(episodeNumber, maxTurns, keepPlan)
             break
           } catch (cause) {
             if (pending.cancelled) return
@@ -317,7 +320,7 @@ export function useGenerationStream(): UseGenerationStream {
         if (pending.cancelled) return
         pendingRef.current = null
         setState((previous) => ({ ...previous, waiting: null }))
-        open(episodeNumber, maxTurns)
+        open(episodeNumber, maxTurns, keepPlan)
       })()
     },
     [open],

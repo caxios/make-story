@@ -248,6 +248,28 @@ export const addEpisode = (authorStoryline: string, title = '', pacing: Pacing =
     body: { author_storyline: authorStoryline, title, pacing },
   })
 
+/** Put a new episode in as episode `at`; everything from there on moves down one. */
+export const insertEpisode = (
+  at: number,
+  authorStoryline: string,
+  title = '',
+  pacing: Pacing = 'normal',
+) =>
+  request<Episode[]>('/api/episodes/insert', {
+    method: 'POST',
+    body: { at, author_storyline: authorStoryline, title, pacing },
+  })
+
+/**
+ * The outline for a new episode that would go in as episode `at`, written from
+ * the episode before it and the one after. Nothing is saved.
+ */
+export const draftInsertEpisode = (at: number, direction = '') =>
+  request<{ at: number; author_storyline: string }>('/api/episodes/draft-insert', {
+    method: 'POST',
+    body: { at, direction },
+  })
+
 export const updateEpisode = (episodeNumber: number, update: EpisodeUpdate) =>
   request<Episode>(`/api/episodes/${episodeNumber}`, { method: 'PUT', body: update })
 
@@ -394,16 +416,16 @@ export const getPendingGenerations = () =>
 export const getRunningGenerations = () => request<number[]>('/api/generation/running')
 
 /** The SSE endpoint. Opened by `useGenerationStream`, not by `fetch`. */
-export const generationStreamUrl = (episodeNumber: number, maxTurns: number) =>
-  `/api/generation/stream/${episodeNumber}?max_turns=${maxTurns}`
+export const generationStreamUrl = (episodeNumber: number, maxTurns: number, keepPlan = false) =>
+  `/api/generation/stream/${episodeNumber}?max_turns=${maxTurns}${keepPlan ? '&keep_plan=true' : ''}`
 
 /**
  * Would the stream start this episode? Asked before opening it, because an
  * EventSource that is refused cannot read why — this ordinary request can.
  */
-export const checkGeneration = (episodeNumber: number, maxTurns: number) =>
+export const checkGeneration = (episodeNumber: number, maxTurns: number, keepPlan = false) =>
   request<{ episode_number: number; resumable: boolean; scenes_completed: number }>(
-    `/api/generation/check/${episodeNumber}?max_turns=${maxTurns}`,
+    `/api/generation/check/${episodeNumber}?max_turns=${maxTurns}${keepPlan ? '&keep_plan=true' : ''}`,
   )
 
 // ==========================================================================

@@ -30,6 +30,7 @@ import { GenerationOverlay } from '@/components/GenerationOverlay'
 import { ChronicleReview } from '@/components/ChronicleReview'
 import { StructurePanel } from '@/components/StructurePanel'
 import { PlanReview } from '@/components/PlanReview'
+import { RewriteChoice } from '@/components/RewriteChoice'
 import { useToast } from '@/components/ToastContext'
 import {
   Badge,
@@ -81,6 +82,8 @@ export function EpisodeQueue() {
     setSelected(new Set())
   }, [queueShape])
   const [regenerating, setRegenerating] = useState<Episode | null>(null)
+  // 회차 사이에 끼워 넣을 자리: 새 회차가 받을 번호.
+  const [inserting, setInserting] = useState<number | null>(null)
   const [expanded, setExpanded] = useState<number | null>(null)
   // The drag source lives in a ref as well as state: `drop` reads it in the
   // same tick that `dragstart` set it, and state would still be the old value.
@@ -214,12 +217,16 @@ export function EpisodeQueue() {
     }
   }
 
-  const generate = (episode: Episode) => {
+  /** `keepPlan`: a finished chapter is rewritten to the plan it was written to. */
+  const generate = (episode: Episode, keepPlan = false) => {
     generation.reset()
-    generation.begin(episode.episode_number, maxTurns)
+    generation.begin(episode.episode_number, maxTurns, keepPlan)
   }
 
-  /** Draft the layout and open it for review. One model call; nothing written. */
+  /**
+   * Draft the layout and open it for review. One model call; nothing written.
+   * A finished chapter keeps its prose until the new plan is written.
+   */
   const planEpisode = async (episode: Episode) => {
     setPlanningFor(episode.episode_number)
     try {
@@ -261,7 +268,7 @@ export function EpisodeQueue() {
     <>
       <PageHeader
         title="에피소드 큐"
-        description="각 회차별 개요를 관리합니다. 디렉터 AI가 개요 사이의 사건과 대사를 유기적으로 채워 넣습니다."
+        description="각 회차별 개요를 관리합니다. 디렉터 AI가 개요 사이의 사건과 대사를 유기적으로 채워 넣습니다. 회차 사이에 마우스를 올리면 그 자리에 새 회차를 끼워 넣을 수 있습니다."
         actions={
           <>
             <Button icon={FileStack} onClick={() => setBatching(true)}>
@@ -360,55 +367,63 @@ export function EpisodeQueue() {
             )}
           </div>
           {episodes.map((episode, index) => (
-            <EpisodeCard
-              key={episode.episode_number}
-              selected={selected.has(episode.episode_number)}
-              onSelect={(on) =>
-                setSelected((current) => {
-                  const next = new Set(current)
-                  if (on) next.add(episode.episode_number)
-                  else next.delete(episode.episode_number)
-                  return next
-                })
-              }
-              episode={episode}
-              first={index === 0}
-              last={index === episodes.length - 1}
-              busy={busy}
-              expanded={expanded === episode.episode_number}
-              isDragging={dragging === episode.episode_number}
-              isDropTarget={dropTarget === episode.episode_number && dragging !== null}
-              resumable={pending.some(
-                (item) => item.episode_number === episode.episode_number,
-              )}
-              generating={running === episode.episode_number && generation.isRunning}
-              onToggle={() =>
-                setExpanded((value) =>
-                  value === episode.episode_number ? null : episode.episode_number,
-                )
-              }
-              onMove={(offset) => void move(episode, offset)}
-              onEdit={() => setEditing(episode)}
-              onDelete={() => setDeleting(episode)}
-              onRequeue={() => void requeue(episode)}
-              planning={planningFor === episode.episode_number}
-              onPlan={() => void planEpisode(episode)}
-              onReviewPlan={() => void reviewPlan(episode)}
-              onGenerate={() =>
-                episode.status === 'completed' ? setRegenerating(episode) : generate(episode)
-              }
-              onDragStart={() => {
-                draggingRef.current = episode.episode_number
-                setDragging(episode.episode_number)
-              }}
-              onDragOver={() => setDropTarget(episode.episode_number)}
-              onDrop={() => void drop(episode.episode_number)}
-              onDragEnd={() => {
-                draggingRef.current = null
-                setDragging(null)
-                setDropTarget(null)
-              }}
-            />
+            <div key={episode.episode_number} className="space-y-2.5">
+              <InsertSlot
+                label={
+                  index === 0 ? '1화 앞에 회차 넣기' : `${index}화와 ${index + 1}화 사이에 회차 넣기`
+                }
+                disabled={busy}
+                onClick={() => setInserting(episode.episode_number)}
+              />
+              <EpisodeCard
+                selected={selected.has(episode.episode_number)}
+                onSelect={(on) =>
+                  setSelected((current) => {
+                    const next = new Set(current)
+                    if (on) next.add(episode.episode_number)
+                    else next.delete(episode.episode_number)
+                    return next
+                  })
+                }
+                episode={episode}
+                first={index === 0}
+                last={index === episodes.length - 1}
+                busy={busy}
+                expanded={expanded === episode.episode_number}
+                isDragging={dragging === episode.episode_number}
+                isDropTarget={dropTarget === episode.episode_number && dragging !== null}
+                resumable={pending.some(
+                  (item) => item.episode_number === episode.episode_number,
+                )}
+                generating={running === episode.episode_number && generation.isRunning}
+                onToggle={() =>
+                  setExpanded((value) =>
+                    value === episode.episode_number ? null : episode.episode_number,
+                  )
+                }
+                onMove={(offset) => void move(episode, offset)}
+                onEdit={() => setEditing(episode)}
+                onDelete={() => setDeleting(episode)}
+                onRequeue={() => void requeue(episode)}
+                planning={planningFor === episode.episode_number}
+                onPlan={() => void planEpisode(episode)}
+                onReviewPlan={() => void reviewPlan(episode)}
+                onGenerate={() =>
+                  episode.status === 'completed' ? setRegenerating(episode) : generate(episode)
+                }
+                onDragStart={() => {
+                  draggingRef.current = episode.episode_number
+                  setDragging(episode.episode_number)
+                }}
+                onDragOver={() => setDropTarget(episode.episode_number)}
+                onDrop={() => void drop(episode.episode_number)}
+                onDragEnd={() => {
+                  draggingRef.current = null
+                  setDragging(null)
+                  setDropTarget(null)
+                }}
+              />
+            </div>
           ))}
         </div>
       )}
@@ -469,6 +484,13 @@ export function EpisodeQueue() {
         nextNumber={episodes.length + 1}
         onClose={() => setAdding(false)}
         onAdded={refresh}
+      />
+
+      <InsertEpisodeModal
+        at={inserting}
+        episodes={episodes}
+        onClose={() => setInserting(null)}
+        onInserted={refresh}
       />
 
       <BatchAddModal open={batching} onClose={() => setBatching(false)} onAdded={refresh} />
@@ -539,26 +561,210 @@ export function EpisodeQueue() {
         }
       />
 
-      <ConfirmDialog
-        open={regenerating !== null}
+      <RewriteChoice
+        episode={regenerating}
         onClose={() => setRegenerating(null)}
-        onConfirm={() => {
-          if (regenerating) generate(regenerating)
+        onKeepPlan={() => {
+          if (regenerating) generate(regenerating, true)
         }}
-        title={`제${regenerating?.episode_number}화를 다시 생성하시겠습니까?`}
-        confirmLabel="다시 생성"
-        destructive={false}
-        message={
-          <>
-            기존에 작성된 본문({formatCount(words(regenerating?.final_text ?? ''))} 단어)은
-            새로 생성되는 본문으로 완전히 덮어씌워집니다.
-            <p className="mt-2 text-ink-muted">
-              이어서 쓰지 않고 처음부터 새로 집필되며, 기존 진행 체크포인트는 초기화됩니다.
-            </p>
-          </>
-        }
+        onReplan={() => {
+          if (regenerating) void planEpisode(regenerating)
+        }}
+        keepPlanNote="바로 집필을 시작합니다."
+        replanNote="새 기획서를 검토하고 승인한 뒤에 본문을 씁니다."
       />
     </>
+  )
+}
+
+// ==========================================================================
+// Insert between
+// ==========================================================================
+
+/** 회차 카드 사이의 틈. 마우스를 올리면 그 자리에 끼워 넣는 버튼이 보인다. */
+function InsertSlot({
+  label,
+  disabled,
+  onClick,
+}: {
+  label: string
+  disabled: boolean
+  onClick: () => void
+}) {
+  return (
+    <div className="group/slot relative -my-1.5 flex h-4 items-center justify-center">
+      <span
+        className="absolute inset-x-6 top-1/2 h-px bg-accent/40 opacity-0 transition-opacity group-hover/slot:opacity-100"
+        aria-hidden
+      />
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onClick}
+        className="relative z-10 flex items-center gap-1 rounded-full border border-accent/40 bg-surface px-2.5 py-0.5 text-[0.7rem] text-accent-bright opacity-0 transition-opacity group-hover/slot:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed"
+      >
+        <Plus className="size-3" aria-hidden />
+        {label}
+      </button>
+    </div>
+  )
+}
+
+/** 앞 회차에서 이어받고 뒤 회차로 넘겨주는 회차를, 직접 쓰거나 AI에게 맡겨 끼워 넣는다. */
+function InsertEpisodeModal({
+  at,
+  episodes,
+  onClose,
+  onInserted,
+}: {
+  at: number | null
+  episodes: Episode[]
+  onClose: () => void
+  onInserted: () => Promise<void>
+}) {
+  const { success, fromError } = useToast()
+  const { registerFrom } = useSettingsRegistration()
+  const [outline, setOutline] = useState('')
+  const [title, setTitle] = useState('')
+  const [direction, setDirection] = useState('')
+  const [drafting, setDrafting] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // 다른 자리를 열면 쓰던 것은 버린다.
+  useEffect(() => {
+    setOutline('')
+    setTitle('')
+    setDirection('')
+  }, [at])
+
+  if (at === null) return null
+
+  const before = episodes.find((e) => e.episode_number === at - 1)
+  const after = episodes.find((e) => e.episode_number === at)
+  const writtenAfter = episodes
+    .filter((e) => e.episode_number >= at && e.status === 'completed')
+    .map((e) => e.episode_number)
+
+  const gist = (episode: Episode) =>
+    episode.status === 'completed' && episode.summary.trim()
+      ? episode.summary
+      : episode.author_storyline || '(개요가 비어 있습니다)'
+
+  const draft = async () => {
+    setDrafting(true)
+    try {
+      const drafted = await api.draftInsertEpisode(at, direction.trim())
+      setOutline(drafted.author_storyline)
+    } catch (cause) {
+      fromError(cause, '끼워 넣을 회차의 개요를 쓰지 못했습니다.')
+    } finally {
+      setDrafting(false)
+    }
+  }
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await api.insertEpisode(at, outline.trim(), title.trim())
+      success(`${at}화 자리에 새 회차를 넣었습니다. 뒤 회차들은 번호가 하나씩 밀렸습니다.`)
+      onClose()
+      await onInserted()
+      // 새 개요에 나온 인물·장소·설정을 작품에 등록한다.
+      void registerFrom([at])
+    } catch (cause) {
+      fromError(cause, '회차를 끼워 넣지 못했습니다.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const sides = [
+    { label: before ? `앞 · ${at - 1}화` : '앞', episode: before },
+    { label: after ? `뒤 · 지금 ${at}화 → ${at + 1}화가 됨` : '뒤', episode: after },
+  ]
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      wide
+      title={before ? `${at - 1}화와 ${at}화 사이에 회차 넣기` : '1화 앞에 회차 넣기'}
+      description={`새 회차는 ${at}화가 되고, 지금의 ${at}화부터는 번호가 하나씩 밀립니다.`}
+      footer={
+        <>
+          <Button onClick={onClose}>취소</Button>
+          <Button
+            variant="primary"
+            icon={Plus}
+            loading={saving}
+            disabled={!outline.trim() || drafting}
+            onClick={() => void save()}
+          >
+            {at}화로 넣기
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {sides.map(({ label, episode }) => (
+            <div key={label} className="rounded-lg border border-line bg-surface/60 px-3 py-2">
+              <p className="mb-1 text-[0.65rem] font-medium tracking-wide text-ink-muted">{label}</p>
+              <p className="line-clamp-5 text-xs leading-relaxed text-ink-dim">
+                {episode ? gist(episode) : '(없음)'}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {writtenAfter.length > 0 && (
+          <div className="flex items-start gap-2 rounded-lg border border-warn/30 bg-warn/8 px-3 py-2">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden />
+            <p className="text-xs leading-relaxed text-ink-dim">
+              이미 쓴 {writtenAfter.map((n) => `${n}화`).join(', ')}보다 앞에 들어갑니다. 그 본문은
+              이 회차 없이 쓰였으니, 새 회차와 어긋나는 데가 없는지 확인하세요.
+            </p>
+          </div>
+        )}
+
+        <div className="rounded-lg border border-line p-3">
+          <TextArea
+            label="AI에게 바라는 것 (선택)"
+            rows={2}
+            value={direction}
+            onChange={(event) => setDirection(event.target.value)}
+            placeholder="예: 두 사람이 처음 속마음을 털어놓는 숨 고르는 회차 / 비워 두면 앞뒤 회차 사이에 필요한 회차를 정합니다"
+          />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-ink-muted">
+              앞 회차에서 이어받아 뒤 회차로 자연스럽게 넘어가도록 씁니다. 모델을 한 번 호출합니다.
+            </p>
+            <Button
+              icon={Sparkles}
+              loading={drafting}
+              disabled={drafting || saving}
+              onClick={() => void draft()}
+            >
+              {outline.trim() ? 'AI로 다시 쓰기' : 'AI로 개요 쓰기'}
+            </Button>
+          </div>
+        </div>
+
+        <TextArea
+          label="개요"
+          rows={6}
+          value={outline}
+          onChange={(event) => setOutline(event.target.value)}
+          placeholder="직접 쓰거나, 위에서 AI에게 맡기세요."
+        />
+        <TextField
+          label="제목 (선택)"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="비워 두면 본문을 쓸 때 정해집니다"
+        />
+      </div>
+    </Modal>
   )
 }
 
